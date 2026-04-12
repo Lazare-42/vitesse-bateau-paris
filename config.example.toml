@@ -1,0 +1,15 @@
+[database]
+url = "postgres://sillage_9ffe5e30:sillage_9ffe5e30@localhost:5432/sillage_9ffe5e30?sslmode=disable"
+
+[ais]
+api_key = "your-aisstream-api-key"
+
+# Speed limit in knots. Seine in Paris: ~12 km/h = ~6.5 knots
+speed_limit_knots = 6.5
+
+# Bounding box for Seine in Paris [sw_lat, sw_lon, ne_lat, ne_lon]
+bbox = [48.815, 2.25, 48.91, 2.42]
+
+[server]
+port = 8080
+bind = "0.0.0.0"

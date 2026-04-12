@@ -1,0 +1,6 @@
+vitesse
+config.toml
+*.exe
+.next/
+frontend/node_modules/
+frontend/.next/
