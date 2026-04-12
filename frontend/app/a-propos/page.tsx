@@ -152,7 +152,7 @@ export default function AProposPage() {
           <p>
             Le code source de ce projet est disponible sur{" "}
             <a
-              href="https://github.com/lazrossi/vitesse-bateau-paris"
+              href="https://github.com/Lazare-42/vitesse-bateau-paris"
               target="_blank"
               rel="noopener noreferrer"
               className="underline hover:text-foreground transition-colors"
