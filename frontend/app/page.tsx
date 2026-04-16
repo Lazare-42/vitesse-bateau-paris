@@ -64,22 +64,28 @@ export default async function Home() {
       {stats && <Stats data={stats} />}
 
       <section className="mt-8">
-        <h2 className="mb-4 text-lg font-semibold">Pires recidivistes</h2>
+        <h2 className="mb-1 text-lg font-semibold">Les plus rapides</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Classe par le total au-dessus de la limite : pour chaque exces, on
+          prend la vitesse moyenne moins la limite (12 km/h), et on additionne
+          le tout. Exemple : 93 exces a +2.3 km/h en moyenne = +214 km/h
+          cumules. Plus un bateau depasse souvent et fort, plus il monte.
+        </p>
         <OffendersTable data={offenders} />
       </section>
 
       <section className="mt-8">
         <div className="mb-4">
-          <h2 className="text-lg font-semibold">Infractions recentes</h2>
+          <h2 className="text-lg font-semibold">Exces recents</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Une infraction est un segment continu ou un bateau depasse la limite
-            de 12 km/h (6.5 noeuds). Elle commence au premier ping en exces et
-            se termine quand la vitesse repasse sous la limite. La vitesse max,
-            la vitesse moyenne, la duree et le trajet (point de depart &rarr;
-            point d&apos;arrivee) sont enregistres.
+            Un exces de vitesse est un segment continu ou un bateau depasse la
+            limite de 12 km/h (6.5 noeuds). Il commence au premier ping en
+            exces et se termine quand la vitesse repasse sous la limite. La
+            vitesse max, la vitesse moyenne, la duree et le trajet (point de
+            depart &rarr; point d&apos;arrivee) sont enregistres.
           </p>
         </div>
-        <ViolationsTable data={infractions} />
+        <ViolationsTable data={infractions} offenders={offenders} />
       </section>
     </main>
   );

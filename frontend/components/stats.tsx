@@ -18,7 +18,7 @@ export function Stats({ data }: { data: StatsData }) {
       value: data.total_vessels_tracked.toLocaleString("fr-FR"),
     },
     {
-      label: "Infractions",
+      label: "Exces",
       value: data.total_infractions.toLocaleString("fr-FR"),
     },
     {
@@ -31,7 +31,7 @@ export function Stats({ data }: { data: StatsData }) {
       sub: `${data.max_infraction_speed_knots.toFixed(1)} noeuds`,
     },
     {
-      label: "Vitesse moy. infraction",
+      label: "Vitesse moy. en exces",
       value: `${knotsToKmh(data.avg_infraction_speed_knots)} km/h`,
       sub: `${data.avg_infraction_speed_knots.toFixed(1)} noeuds`,
     },

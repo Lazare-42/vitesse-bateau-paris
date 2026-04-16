@@ -50,12 +50,13 @@ type Infraction struct {
 }
 
 type Offender struct {
-	MMSI            int       `json:"mmsi"`
-	VesselName      string    `json:"vessel_name"`
-	InfractionCount int       `json:"infraction_count"`
-	MaxSpeedKnots   float64   `json:"max_speed_knots"`
-	AvgSpeedKnots   float64   `json:"avg_speed_knots"`
-	LastInfractionAt time.Time `json:"last_infraction_at"`
+	MMSI              int       `json:"mmsi"`
+	VesselName        string    `json:"vessel_name"`
+	InfractionCount   int       `json:"infraction_count"`
+	MaxSpeedKnots     float64   `json:"max_speed_knots"`
+	AvgSpeedKnots     float64   `json:"avg_speed_knots"`
+	LastInfractionAt  time.Time `json:"last_infraction_at"`
+	CumulativeExcess  float64   `json:"cumulative_excess_knots"`
 }
 
 type Stats struct {
@@ -129,12 +130,16 @@ func (s *Store) InsertInfraction(ctx context.Context, inf *Infraction) error {
 
 func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT mmsi, vessel_name, COUNT(*) as infraction_count,
-		       MAX(max_speed_knots) as max_speed, AVG(avg_speed_knots) as avg_speed,
-		       MAX(ended_at) as last_infraction
-		FROM infractions
-		GROUP BY mmsi, vessel_name
-		ORDER BY infraction_count DESC, max_speed DESC
+		SELECT i.mmsi,
+		       COALESCE(NULLIF(v.name, ''), MAX(i.vessel_name), '') as vessel_name,
+		       COUNT(*) as infraction_count,
+		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
+		       MAX(i.ended_at) as last_infraction,
+		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess
+		FROM infractions i
+		LEFT JOIN vessels v ON i.mmsi = v.mmsi
+		GROUP BY i.mmsi, v.name
+		ORDER BY cumulative_excess DESC, max_speed DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -146,7 +151,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 	for rows.Next() {
 		var o Offender
 		if err := rows.Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
-			&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt); err != nil {
+			&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess); err != nil {
 			return nil, err
 		}
 		offenders = append(offenders, o)
@@ -157,14 +162,18 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infraction, error) {
 	o := &Offender{}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT mmsi, vessel_name, COUNT(*) as infraction_count,
-		       MAX(max_speed_knots) as max_speed, AVG(avg_speed_knots) as avg_speed,
-		       MAX(ended_at) as last_infraction
-		FROM infractions
-		WHERE mmsi = $1
-		GROUP BY mmsi, vessel_name
+		SELECT i.mmsi,
+		       COALESCE(NULLIF(v.name, ''), MAX(i.vessel_name), '') as vessel_name,
+		       COUNT(*) as infraction_count,
+		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
+		       MAX(i.ended_at) as last_infraction,
+		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess
+		FROM infractions i
+		LEFT JOIN vessels v ON i.mmsi = v.mmsi
+		WHERE i.mmsi = $1
+		GROUP BY i.mmsi, v.name
 	`, mmsi).Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
-		&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt)
+		&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess)
 	if err == sql.ErrNoRows {
 		return nil, nil, nil
 	}
@@ -173,11 +182,14 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, mmsi, vessel_name, max_speed_knots, avg_speed_knots, speed_limit_knots,
-		       start_lat, start_lon, end_lat, end_lon, started_at, ended_at, ping_count
-		FROM infractions
-		WHERE mmsi = $1
-		ORDER BY ended_at DESC
+		SELECT i.id, i.mmsi,
+		       COALESCE(NULLIF(v.name, ''), i.vessel_name, '') as vessel_name,
+		       i.max_speed_knots, i.avg_speed_knots, i.speed_limit_knots,
+		       i.start_lat, i.start_lon, i.end_lat, i.end_lon, i.started_at, i.ended_at, i.ping_count
+		FROM infractions i
+		LEFT JOIN vessels v ON i.mmsi = v.mmsi
+		WHERE i.mmsi = $1
+		ORDER BY i.ended_at DESC
 		LIMIT 100
 	`, mmsi)
 	if err != nil {
@@ -200,10 +212,13 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 
 func (s *Store) RecentInfractions(ctx context.Context, limit int) ([]Infraction, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, mmsi, vessel_name, max_speed_knots, avg_speed_knots, speed_limit_knots,
-		       start_lat, start_lon, end_lat, end_lon, started_at, ended_at, ping_count
-		FROM infractions
-		ORDER BY ended_at DESC
+		SELECT i.id, i.mmsi,
+		       COALESCE(NULLIF(v.name, ''), i.vessel_name, '') as vessel_name,
+		       i.max_speed_knots, i.avg_speed_knots, i.speed_limit_knots,
+		       i.start_lat, i.start_lon, i.end_lat, i.end_lon, i.started_at, i.ended_at, i.ping_count
+		FROM infractions i
+		LEFT JOIN vessels v ON i.mmsi = v.mmsi
+		ORDER BY i.ended_at DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {

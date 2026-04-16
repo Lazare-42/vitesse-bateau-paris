@@ -83,14 +83,14 @@ export default function AProposPage() {
 
         <section>
           <h2 className="mb-2 text-base font-semibold text-foreground">
-            Definition d&apos;une infraction
+            Definition d&apos;un exces de vitesse
           </h2>
           <p>
-            Une infraction est un{" "}
+            Un exces de vitesse est un{" "}
             <strong className="text-foreground">
               segment continu de depassement de la limite
             </strong>
-            . Elle est definie comme suit :
+            . Il est defini comme suit :
           </p>
           <ul className="mt-2 list-disc pl-5 space-y-1">
             <li>
@@ -115,10 +115,10 @@ export default function AProposPage() {
             </li>
           </ul>
           <p className="mt-2">
-            Ce n&apos;est pas une infraction au sens legal &mdash; seuls les
-            services de la navigation fluviale (VNF) sont habilites a verbaliser.
-            Il s&apos;agit d&apos;un constat factuel base sur les donnees AIS
-            publiques.
+            Ce n&apos;est pas un exces au sens legal &mdash; seuls les
+            services de la navigation fluviale (VNF) sont habilites a
+            verbaliser. Il s&apos;agit d&apos;un constat factuel base sur les
+            donnees AIS publiques.
           </p>
         </section>
 
@@ -129,7 +129,7 @@ export default function AProposPage() {
           <ul className="list-disc pl-5 space-y-1">
             <li>
               <strong className="text-foreground">Backend :</strong> Go, connecte
-              en WebSocket au flux AIS. Stocke les positions et infractions dans
+              en WebSocket au flux AIS. Stocke les positions et exces dans
               PostgreSQL.
             </li>
             <li>
