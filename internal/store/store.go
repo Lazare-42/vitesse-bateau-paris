@@ -4,10 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	_ "github.com/lib/pq"
 )
+
+// sustainedFilter is the WHERE-clause fragment applied to every infraction
+// query so brief GPS spikes (typically under bridges, where the signal is
+// disrupted) do not count as real speeding events. Tables must be aliased `i`.
+const sustainedFilter = `(i.ended_at - i.started_at) >= INTERVAL '30 seconds'`
 
 type Store struct {
 	db *sql.DB
@@ -60,12 +66,25 @@ type Offender struct {
 }
 
 type Stats struct {
-	TotalVesselsTracked int     `json:"total_vessels_tracked"`
-	TotalPositions      int64   `json:"total_positions"`
-	TotalInfractions    int64   `json:"total_infractions"`
-	UniqueOffenders     int     `json:"unique_offenders"`
-	AvgInfractionSpeed  float64 `json:"avg_infraction_speed_knots"`
-	MaxInfractionSpeed  float64 `json:"max_infraction_speed_knots"`
+	TotalVesselsTracked  int     `json:"total_vessels_tracked"`
+	TotalPositions       int64   `json:"total_positions"`
+	TotalInfractions     int64   `json:"total_infractions"`
+	UniqueOffenders      int     `json:"unique_offenders"`
+	AvgInfractionSpeed   float64 `json:"avg_infraction_speed_knots"`
+	MaxInfractionSpeed   float64 `json:"max_infraction_speed_knots"`
+	AvgInfractionsPerDay float64 `json:"avg_infractions_per_day"`
+}
+
+type VesselSpeedRow struct {
+	InfractionID    int64     `json:"infraction_id"`
+	MMSI            int       `json:"mmsi"`
+	VesselName      string    `json:"vessel_name"`
+	MaxSpeedKnots   float64   `json:"max_speed_knots"`
+	AvgSpeedKnots   float64   `json:"avg_speed_knots"`
+	SpeedLimitKnots float64   `json:"speed_limit_knots"`
+	StartedAt       time.Time `json:"started_at"`
+	EndedAt         time.Time `json:"ended_at"`
+	DurationSeconds int       `json:"duration_seconds"`
 }
 
 func New(databaseURL string) (*Store, error) {
@@ -138,6 +157,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
+		WHERE `+sustainedFilter+`
 		GROUP BY i.mmsi, v.name
 		ORDER BY cumulative_excess DESC, max_speed DESC
 		LIMIT $1
@@ -170,7 +190,7 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
-		WHERE i.mmsi = $1
+		WHERE i.mmsi = $1 AND `+sustainedFilter+`
 		GROUP BY i.mmsi, v.name
 	`, mmsi).Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
 		&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess)
@@ -188,7 +208,7 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		       i.start_lat, i.start_lon, i.end_lat, i.end_lon, i.started_at, i.ended_at, i.ping_count
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
-		WHERE i.mmsi = $1
+		WHERE i.mmsi = $1 AND `+sustainedFilter+`
 		ORDER BY i.ended_at DESC
 		LIMIT 100
 	`, mmsi)
@@ -210,7 +230,36 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 	return o, infractions, rows.Err()
 }
 
-func (s *Store) RecentInfractions(ctx context.Context, limit int) ([]Infraction, error) {
+// GetInfraction returns a single infraction by id (no sustained-duration
+// filter — callers may want to display any record, e.g. a leaderboard link).
+// Returns nil on no match.
+func (s *Store) GetInfraction(ctx context.Context, id int64) (*Infraction, error) {
+	inf := &Infraction{}
+	err := s.db.QueryRowContext(ctx, `
+		SELECT i.id, i.mmsi,
+		       COALESCE(NULLIF(v.name, ''), i.vessel_name, '') as vessel_name,
+		       i.max_speed_knots, i.avg_speed_knots, i.speed_limit_knots,
+		       i.start_lat, i.start_lon, i.end_lat, i.end_lon, i.started_at, i.ended_at, i.ping_count
+		FROM infractions i
+		LEFT JOIN vessels v ON i.mmsi = v.mmsi
+		WHERE i.id = $1
+	`, id).Scan(&inf.ID, &inf.MMSI, &inf.VesselName, &inf.MaxSpeedKnots,
+		&inf.AvgSpeedKnots, &inf.SpeedLimitKnots, &inf.StartLat, &inf.StartLon,
+		&inf.EndLat, &inf.EndLon, &inf.StartedAt, &inf.EndedAt, &inf.PingCount)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return inf, nil
+}
+
+func (s *Store) RecentInfractions(ctx context.Context, limit, sinceHours int) ([]Infraction, error) {
+	since := ""
+	if sinceHours > 0 {
+		since = fmt.Sprintf(" AND i.started_at >= NOW() - INTERVAL '%d hours'", sinceHours)
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT i.id, i.mmsi,
 		       COALESCE(NULLIF(v.name, ''), i.vessel_name, '') as vessel_name,
@@ -218,6 +267,7 @@ func (s *Store) RecentInfractions(ctx context.Context, limit int) ([]Infraction,
 		       i.start_lat, i.start_lon, i.end_lat, i.end_lon, i.started_at, i.ended_at, i.ping_count
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
+		WHERE `+sustainedFilter+since+`
 		ORDER BY i.ended_at DESC
 		LIMIT $1
 	`, limit)
@@ -252,25 +302,84 @@ func (s *Store) GetStats(ctx context.Context) (*Stats, error) {
 		return nil, err
 	}
 
-	err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM infractions`).Scan(&st.TotalInfractions)
+	err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM infractions i WHERE `+sustainedFilter).Scan(&st.TotalInfractions)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT mmsi) FROM infractions`).Scan(&st.UniqueOffenders)
+	err = s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT i.mmsi) FROM infractions i WHERE `+sustainedFilter).Scan(&st.UniqueOffenders)
 	if err != nil {
 		return nil, err
 	}
 
 	var avgSpeed, maxSpeed sql.NullFloat64
-	err = s.db.QueryRowContext(ctx, `SELECT AVG(max_speed_knots), MAX(max_speed_knots) FROM infractions`).Scan(&avgSpeed, &maxSpeed)
+	err = s.db.QueryRowContext(ctx, `SELECT AVG(i.max_speed_knots), MAX(i.max_speed_knots) FROM infractions i WHERE `+sustainedFilter).Scan(&avgSpeed, &maxSpeed)
 	if err != nil {
 		return nil, err
 	}
 	st.AvgInfractionSpeed = avgSpeed.Float64
 	st.MaxInfractionSpeed = maxSpeed.Float64
 
+	// Average sustained infractions per day, since the first recorded
+	// sustained infraction. Floored at 1 day to avoid division blow-ups on
+	// fresh installs.
+	var firstAt sql.NullTime
+	err = s.db.QueryRowContext(ctx, `SELECT MIN(i.started_at) FROM infractions i WHERE `+sustainedFilter).Scan(&firstAt)
+	if err != nil {
+		return nil, err
+	}
+	if firstAt.Valid && st.TotalInfractions > 0 {
+		days := time.Since(firstAt.Time).Hours() / 24
+		if days < 1 {
+			days = 1
+		}
+		st.AvgInfractionsPerDay = float64(st.TotalInfractions) / days
+	}
+
 	return st, nil
+}
+
+// FastestVessels returns the top N vessels by personal-best max speed, one row
+// per vessel. Limited to sustained infractions.
+func (s *Store) FastestVessels(ctx context.Context, limit int) ([]VesselSpeedRow, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT ON (i.mmsi)
+		       i.id, i.mmsi,
+		       COALESCE(NULLIF(v.name, ''), i.vessel_name, '') as vessel_name,
+		       i.max_speed_knots, i.avg_speed_knots, i.speed_limit_knots,
+		       i.started_at, i.ended_at,
+		       EXTRACT(EPOCH FROM (i.ended_at - i.started_at))::int as duration_seconds
+		FROM infractions i
+		LEFT JOIN vessels v ON i.mmsi = v.mmsi
+		WHERE `+sustainedFilter+`
+		ORDER BY i.mmsi, i.max_speed_knots DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []VesselSpeedRow
+	for rows.Next() {
+		var r VesselSpeedRow
+		if err := rows.Scan(&r.InfractionID, &r.MMSI, &r.VesselName, &r.MaxSpeedKnots, &r.AvgSpeedKnots,
+			&r.SpeedLimitKnots, &r.StartedAt, &r.EndedAt, &r.DurationSeconds); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// DISTINCT ON forces ordering by mmsi first; re-sort by speed for the leaderboard.
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].MaxSpeedKnots > out[j].MaxSpeedKnots
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 // UnnamedVessels returns MMSIs of vessels with empty names, limited to n results.

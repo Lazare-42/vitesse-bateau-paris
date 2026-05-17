@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { CarteLink } from "./carte-link";
 
 interface Infraction {
   id: number;
@@ -111,6 +112,13 @@ function SortIcon({ active, desc }: { active: boolean; desc: boolean }) {
 
 const speedThresholds = [0, 13, 14, 15, 16, 20] as const;
 
+const dateChips: { hours: number; label: string }[] = [
+  { hours: 24, label: "24h" },
+  { hours: 168, label: "7 jours" },
+  { hours: 720, label: "30 jours" },
+  { hours: 0, label: "Tout" },
+];
+
 function knotsFromKmh(kmh: number): number {
   return kmh / 1.852;
 }
@@ -126,12 +134,37 @@ export function ViolationsTable({
   const [sortDesc, setSortDesc] = useState(true);
   const [minSpeedKmh, setMinSpeedKmh] = useState(0);
   const [selectedMmsi, setSelectedMmsi] = useState("");
+  const [sinceHours, setSinceHours] = useState(24);
+  const [refetched, setRefetched] = useState<Infraction[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleDateChip = useCallback(async (hours: number) => {
+    setSinceHours(hours);
+    if (hours === 24) {
+      // initial server-side fetch already covered this window
+      setRefetched(null);
+      return;
+    }
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "2000" });
+      if (hours > 0) params.set("since_hours", String(hours));
+      const res = await fetch(`/api/infractions?${params.toString()}`);
+      if (res.ok) setRefetched(await res.json());
+    } catch {
+      // keep previous data
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const effectiveData = refetched ?? data;
 
   const boatFiltered = useMemo(() => {
-    if (!selectedMmsi) return data;
+    if (!selectedMmsi) return effectiveData;
     const mmsi = parseInt(selectedMmsi, 10);
-    return data.filter((inf) => inf.mmsi === mmsi);
-  }, [data, selectedMmsi]);
+    return effectiveData.filter((inf) => inf.mmsi === mmsi);
+  }, [effectiveData, selectedMmsi]);
 
   const filtered = useMemo(() => {
     if (minSpeedKmh === 0) return boatFiltered;
@@ -211,6 +244,30 @@ export function ViolationsTable({
           </select>
         </div>
       )}
+
+      {/* Date range filter */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground">Periode :</span>
+        {dateChips.map((c) => (
+          <button
+            key={c.hours}
+            onClick={() => handleDateChip(c.hours)}
+            disabled={loading}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+              sinceHours === c.hours
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+        {loading && (
+          <span className="text-xs text-muted-foreground ml-1 animate-pulse">
+            Chargement...
+          </span>
+        )}
+      </div>
 
       {/* Speed threshold filter */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -329,30 +386,7 @@ export function ViolationsTable({
                   )}
                 </td>
                 <td className="py-3 h-10 px-3 text-right">
-                  <a
-                    href={carteUrl(inf)}
-                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <svg
-                      className="h-3 w-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={2}
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"
-                      />
-                    </svg>
-                    Carte
-                  </a>
+                  <CarteLink href={carteUrl(inf)} />
                 </td>
               </tr>
             ))}

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { InfractionsBrowser } from "@/components/infractions-browser";
+import { MethodologyNote } from "@/components/methodology-note";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +8,7 @@ const API_URL = process.env.API_URL || "http://localhost:8092";
 
 async function getInfractions() {
   try {
-    const res = await fetch(`${API_URL}/api/infractions?limit=1000`, {
+    const res = await fetch(`${API_URL}/api/infractions?since_hours=24&limit=2000`, {
       next: { revalidate: 30 },
     });
     if (!res.ok) return [];
@@ -37,6 +38,7 @@ export default async function InfractionsPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <MethodologyNote />
       <Suspense
         fallback={
           <div className="text-sm text-muted-foreground">Chargement...</div>

@@ -5,6 +5,7 @@ interface StatsData {
   unique_offenders: number;
   avg_infraction_speed_knots: number;
   max_infraction_speed_knots: number;
+  avg_infractions_per_day: number;
 }
 
 function knotsToKmh(knots: number): string {
@@ -22,13 +23,15 @@ export function Stats({ data }: { data: StatsData }) {
       value: data.total_infractions.toLocaleString("fr-FR"),
     },
     {
-      label: "Recidivistes",
+      label: "Rois de la Seine",
       value: data.unique_offenders.toLocaleString("fr-FR"),
     },
     {
-      label: "Vitesse max",
-      value: `${knotsToKmh(data.max_infraction_speed_knots)} km/h`,
-      sub: `${data.max_infraction_speed_knots.toFixed(1)} noeuds`,
+      label: "Exces par jour",
+      value: data.avg_infractions_per_day.toLocaleString("fr-FR", {
+        maximumFractionDigits: 1,
+      }),
+      sub: "moyenne depuis le debut",
     },
     {
       label: "Vitesse moy. en exces",

@@ -83,6 +83,48 @@ export default function AProposPage() {
 
         <section>
           <h2 className="mb-2 text-base font-semibold text-foreground">
+            Quels bateaux sont inclus ?
+          </h2>
+          <p>
+            <strong className="text-foreground">Tous les bateaux qui
+            emettent en AIS dans la zone.</strong> Aucun filtrage par type
+            n&apos;est applique : bateaux de commerce et peniches de fret,
+            bateaux a passagers (bateaux-mouches, vedettes touristiques),
+            vedettes de service (douanes, police fluviale, pompiers, VNF),
+            plaisanciers, peniches-logements en deplacement. Le site se
+            contente d&apos;agreger ce que les transpondeurs emettent. Si un
+            bateau apparait souvent en tete du classement, c&apos;est qu&apos;il
+            depasse souvent la limite &mdash; pas parce qu&apos;il aurait ete
+            cible.
+          </p>
+          <p className="mt-2">
+            Quelques nuances de couverture, par construction du systeme AIS :
+          </p>
+          <ul className="mt-2 list-disc pl-5 space-y-1">
+            <li>
+              Les tres petites embarcations (avirons, kayaks, paddle, petits
+              hors-bord de loisir) n&apos;ont pas de transpondeur et ne sont
+              donc pas visibles.
+            </li>
+            <li>
+              Un bateau qui eteint son AIS disparait du suivi. C&apos;est
+              normalement interdit en navigation commerciale.
+            </li>
+            <li>
+              Les exces tres brefs (moins de 30 secondes) sont ignores pour
+              ecarter les sauts de signal GPS sous les ponts &mdash; les
+              vitesses extremes ponctuelles ne sont donc pas comptees.
+            </li>
+          </ul>
+          <p className="mt-2">
+            Le site n&apos;a pas vocation a designer une categorie d&apos;usagers
+            plutot qu&apos;une autre. Il publie des statistiques brutes sur la
+            base d&apos;une regle unique : 12 km/h pour tout le monde.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-base font-semibold text-foreground">
             Definition d&apos;un exces de vitesse
           </h2>
           <p>

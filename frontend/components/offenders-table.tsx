@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CarteLink } from "./carte-link";
 
 interface Offender {
   mmsi: number;
@@ -276,13 +277,16 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                     sortKey === col.key
                       ? "text-foreground"
                       : "text-muted-foreground"
-                  } last:rounded-tr-lg`}
+                  }`}
                   onClick={() => toggleSort(col.key)}
                 >
                   {col.label}
                   <SortIcon active={sortKey === col.key} desc={desc} />
                 </th>
               ))}
+              <th className="h-8 px-3 bg-secondary dark:bg-input/30 border-b border-input text-right text-muted-foreground font-medium last:rounded-tr-lg">
+                Carte
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -324,6 +328,9 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                 <td className="py-3 h-10 px-3 text-right text-muted-foreground text-xs">
                   {formatDate(o.last_infraction_at)}
                 </td>
+                <td className="py-3 h-10 px-3 text-right">
+                  <CarteLink href={`/carte?bateau=${o.mmsi}`} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -333,43 +340,50 @@ export function OffendersTable({ data }: { data: Offender[] }) {
       {/* Mobile cards */}
       <div className="sm:hidden flex flex-col gap-3">
         {sorted.map((o, i) => (
-          <Link
+          <div
             key={o.mmsi}
-            href={`/exces?bateau=${o.mmsi}`}
-            className="block rounded-lg border bg-card p-4 text-card-foreground active:bg-muted/50 transition-colors"
+            className="rounded-lg border bg-card p-4 text-card-foreground transition-colors"
           >
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="text-xs text-muted-foreground">#{i + 1}</span>
-                <p className="font-semibold">
-                  {o.vessel_name || "Inconnu"}
-                </p>
-                <p className="text-xs text-muted-foreground font-mono">
-                  MMSI {o.mmsi}
-                </p>
+            <Link
+              href={`/exces?bateau=${o.mmsi}`}
+              className="block active:bg-muted/50 -m-4 p-4 rounded-lg"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-xs text-muted-foreground">#{i + 1}</span>
+                  <p className="font-semibold">
+                    {o.vessel_name || "Inconnu"}
+                  </p>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    MMSI {o.mmsi}
+                  </p>
+                </div>
+                <span className="inline-flex items-center rounded-md bg-speed-danger/10 px-2 py-0.5 text-xs font-medium text-speed-danger">
+                  +{knotsToKmh(o.cumulative_excess_knots)} km/h cumule
+                </span>
               </div>
-              <span className="inline-flex items-center rounded-md bg-speed-danger/10 px-2 py-0.5 text-xs font-medium text-speed-danger">
-                +{knotsToKmh(o.cumulative_excess_knots)} km/h cumule
-              </span>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Vitesse max</p>
+                  <p className="font-medium text-speed-danger">
+                    {knotsToKmh(o.max_speed_knots)} km/h
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Nb. exces
+                  </p>
+                  <p>{o.infraction_count}</p>
+                </div>
+              </div>
+            </Link>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Dernier exces : {formatDate(o.last_infraction_at)}
+              </p>
+              <CarteLink href={`/carte?bateau=${o.mmsi}`} />
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Vitesse max</p>
-                <p className="font-medium text-speed-danger">
-                  {knotsToKmh(o.max_speed_knots)} km/h
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Nb. exces
-                </p>
-                <p>{o.infraction_count}</p>
-              </div>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Dernier exces : {formatDate(o.last_infraction_at)}
-            </p>
-          </Link>
+          </div>
         ))}
       </div>
     </>

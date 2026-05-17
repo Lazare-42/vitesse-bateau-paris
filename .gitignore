@@ -4,3 +4,4 @@ config.toml
 .next/
 frontend/node_modules/
 frontend/.next/
+frontend/tsconfig.tsbuildinfo

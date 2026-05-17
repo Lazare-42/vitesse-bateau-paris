@@ -1,6 +1,7 @@
 import { Stats } from "@/components/stats";
-import { OffendersTable } from "@/components/offenders-table";
-import { ViolationsTable } from "@/components/violations-table";
+import { type FastestEver } from "@/components/fastest-table";
+import { MethodologyNote } from "@/components/methodology-note";
+import { HomeTabs } from "@/components/home-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ async function getOffenders() {
 
 async function getInfractions() {
   try {
-    const res = await fetch(`${API_URL}/api/infractions?limit=50`, {
+    const res = await fetch(`${API_URL}/api/infractions?since_hours=24&limit=2000`, {
       next: { revalidate: 30 },
     });
     if (!res.ok) return [];
@@ -42,16 +43,29 @@ async function getInfractions() {
   }
 }
 
+async function getFastest(): Promise<FastestEver[]> {
+  try {
+    const res = await fetch(`${API_URL}/api/fastest?limit=50`, {
+      next: { revalidate: 60 },
+    });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
 export default async function Home() {
-  const [stats, offenders, infractions] = await Promise.all([
+  const [stats, offenders, infractions, fastest] = await Promise.all([
     getStats(),
     getOffenders(),
     getInfractions(),
+    getFastest(),
   ]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">
           Vitesse Bateau Paris
         </h1>
@@ -61,32 +75,19 @@ export default async function Home() {
         </p>
       </div>
 
-      {stats && <Stats data={stats} />}
+      <MethodologyNote />
 
-      <section className="mt-8">
-        <h2 className="mb-1 text-lg font-semibold">Les plus rapides</h2>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Classe par le total au-dessus de la limite : pour chaque exces, on
-          prend la vitesse moyenne moins la limite (12 km/h), et on additionne
-          le tout. Exemple : 93 exces a +2.3 km/h en moyenne = +214 km/h
-          cumules. Plus un bateau depasse souvent et fort, plus il monte.
-        </p>
-        <OffendersTable data={offenders} />
-      </section>
+      {stats && (
+        <section className="mb-8">
+          <Stats data={stats} />
+        </section>
+      )}
 
-      <section className="mt-8">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold">Exces recents</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Un exces de vitesse est un segment continu ou un bateau depasse la
-            limite de 12 km/h (6.5 noeuds). Il commence au premier ping en
-            exces et se termine quand la vitesse repasse sous la limite. La
-            vitesse max, la vitesse moyenne, la duree et le trajet (point de
-            depart &rarr; point d&apos;arrivee) sont enregistres.
-          </p>
-        </div>
-        <ViolationsTable data={infractions} offenders={offenders} />
-      </section>
+      <HomeTabs
+        fastest={fastest}
+        offenders={offenders}
+        infractions={infractions}
+      />
     </main>
   );
 }

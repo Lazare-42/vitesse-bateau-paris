@@ -71,8 +71,12 @@ func (s *Server) handleInfractions(w http.ResponseWriter, r *http.Request) {
 	if limit > 2000 {
 		limit = 2000
 	}
+	sinceHours := queryInt(r, "since_hours", 0)
+	if sinceHours > 24*365 {
+		sinceHours = 24 * 365
+	}
 
-	infractions, err := s.store.RecentInfractions(r.Context(), limit)
+	infractions, err := s.store.RecentInfractions(r.Context(), limit, sinceHours)
 	if err != nil {
 		s.logger.Error("get infractions", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -82,6 +86,45 @@ func (s *Server) handleInfractions(w http.ResponseWriter, r *http.Request) {
 		infractions = []store.Infraction{}
 	}
 	writeJSON(w, http.StatusOK, infractions)
+}
+
+func (s *Server) handleInfractionDetail(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id < 1 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return
+	}
+
+	inf, err := s.store.GetInfraction(r.Context(), id)
+	if err != nil {
+		s.logger.Error("get infraction", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if inf == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "infraction not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, inf)
+}
+
+func (s *Server) handleFastest(w http.ResponseWriter, r *http.Request) {
+	limit := queryInt(r, "limit", 20)
+	if limit > 200 {
+		limit = 200
+	}
+
+	rows, err := s.store.FastestVessels(r.Context(), limit)
+	if err != nil {
+		s.logger.Error("get fastest", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if rows == nil {
+		rows = []store.VesselSpeedRow{}
+	}
+	writeJSON(w, http.StatusOK, rows)
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

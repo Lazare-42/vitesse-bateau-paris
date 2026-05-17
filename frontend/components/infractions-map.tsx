@@ -104,6 +104,16 @@ function formatDateShort(iso: string): string {
   });
 }
 
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function isInZone(inf: Infraction, zone: (typeof ZONES)[0]): boolean {
   const [[s, w], [n, e]] = zone.bounds as [[number, number], [number, number]];
   const midLat = (inf.start_lat + inf.end_lat) / 2;
@@ -335,12 +345,17 @@ export function InfractionsMap({
       {/* Solo mode banner */}
       {soloMode && focusedInfraction && (
         <div className="mb-4 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-          <p className="text-sm font-medium flex-1">
-            {focusedInfraction.vessel_name || "Inconnu"} —{" "}
-            {knotsToKmh(focusedInfraction.max_speed_knots)} km/h (+
-            {excessPercent(focusedInfraction.max_speed_knots, focusedInfraction.speed_limit_knots)}
-            %)
-          </p>
+          <div className="flex-1">
+            <p className="text-sm font-medium">
+              {focusedInfraction.vessel_name || "Inconnu"} —{" "}
+              {knotsToKmh(focusedInfraction.max_speed_knots)} km/h (+
+              {excessPercent(focusedInfraction.max_speed_knots, focusedInfraction.speed_limit_knots)}
+              %)
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {formatDateTime(focusedInfraction.started_at)}
+            </p>
+          </div>
           <button
             onClick={exitSoloMode}
             className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
