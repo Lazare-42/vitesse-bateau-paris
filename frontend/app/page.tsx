@@ -2,6 +2,7 @@ import { Stats } from "@/components/stats";
 import { type FastestEver } from "@/components/fastest-table";
 import { MethodologyNote } from "@/components/methodology-note";
 import { HomeTabs } from "@/components/home-tabs";
+import { SITE, SPEED_LIMIT_KNOTS } from "@/site.config";
 
 export const dynamic = "force-dynamic";
 
@@ -66,12 +67,11 @@ export default async function Home() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">
-          Vitesse Bateau Paris
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight">{SITE.name}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Suivi en temps reel des exces de vitesse sur la Seine &mdash; limite :{" "}
-          6.5 noeuds (~12 km/h)
+          Suivi en temps reel des exces de vitesse sur la {SITE.river} &mdash;
+          limite : {SPEED_LIMIT_KNOTS.toFixed(1)} noeuds (~{SITE.speedLimitKmh}{" "}
+          km/h)
         </p>
       </div>
 

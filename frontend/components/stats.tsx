@@ -1,3 +1,5 @@
+import { SITE } from "@/site.config";
+
 interface StatsData {
   total_vessels_tracked: number;
   total_positions: number;
@@ -23,7 +25,7 @@ export function Stats({ data }: { data: StatsData }) {
       value: data.total_infractions.toLocaleString("fr-FR"),
     },
     {
-      label: "Rois de la Seine",
+      label: `Rois ${SITE.riverWithArticle}`,
       value: data.unique_offenders.toLocaleString("fr-FR"),
     },
     {

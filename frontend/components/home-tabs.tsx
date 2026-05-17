@@ -6,11 +6,12 @@ import { Suspense, useCallback } from "react";
 import { OffendersTable } from "./offenders-table";
 import { ViolationsTable } from "./violations-table";
 import { FastestTable, type FastestEver } from "./fastest-table";
+import { SITE } from "@/site.config";
 
 type TabId = "records" | "rois" | "recents";
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: "rois", label: "Rois de la Seine" },
+  { id: "rois", label: `Rois ${SITE.riverWithArticle}` },
   { id: "records", label: "Records de vitesse" },
   { id: "recents", label: "Exces recents" },
 ];
@@ -127,10 +128,10 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
         >
           <p className="mb-4 text-xs text-muted-foreground">
             Classe par le total au-dessus de la limite : pour chaque exces, on
-            prend la vitesse moyenne moins la limite (12 km/h), et on
-            additionne le tout. Exemple : 93 exces a +2.3 km/h en moyenne =
-            +214 km/h cumules. Plus un bateau depasse souvent et fort, plus il
-            monte.
+            prend la vitesse moyenne moins la limite ({SITE.speedLimitKmh}{" "}
+            km/h), et on additionne le tout. Exemple : 93 exces a +2.3 km/h en
+            moyenne = +214 km/h cumules. Plus un bateau depasse souvent et
+            fort, plus il monte.
           </p>
           <OffendersTable data={offenders} />
         </section>
@@ -144,8 +145,8 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
         >
           <p className="mb-4 text-xs text-muted-foreground">
             Un exces de vitesse est un segment continu ou un bateau depasse la
-            limite de 12 km/h (6.5 noeuds). Il commence au premier ping en
-            exces et se termine quand la vitesse repasse sous la limite. La
+            limite de {SITE.speedLimitKmh} km/h. Il commence au premier ping
+            en exces et se termine quand la vitesse repasse sous la limite. La
             vitesse max, la vitesse moyenne, la duree et le trajet (point de
             depart &rarr; point d&apos;arrivee) sont enregistres.
           </p>

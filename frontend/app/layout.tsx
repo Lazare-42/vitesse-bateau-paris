@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Sofia_Sans } from "next/font/google";
 import { Nav } from "@/components/nav";
+import { SITE } from "@/site.config";
 import "./globals.css";
 
 const sofiaSans = Sofia_Sans({
@@ -11,9 +12,8 @@ const sofiaSans = Sofia_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Vitesse Bateau Paris",
-  description:
-    "Suivi en temps reel des exces de vitesse sur la Seine a Paris",
+  title: SITE.name,
+  description: `Suivi en temps reel des exces de vitesse sur la ${SITE.river} a ${SITE.city}`,
 };
 
 export default function RootLayout({

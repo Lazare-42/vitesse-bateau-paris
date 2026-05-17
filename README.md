@@ -87,6 +87,22 @@ Tous les endpoints renvoient du JSON. Le filtre des 30 secondes est appliqué c�
 
 Le déploiement en production utilise des unités systemd utilisateur (pas Docker, malgré la présence de `docker-compose.yml` qui sert uniquement au développement local). Voir [`AGENTS.md`](./AGENTS.md) pour le détail de la procédure de mise à jour.
 
+### Déployer sur une autre zone (autre fleuve, autre ville)
+
+L'outil est conçu pour être forké : **un déploiement = une zone**. Pour adapter à une autre zone (la Marne, le Rhône, etc.) :
+
+1. **Backend** : dans `config.toml`, ajuster `bbox` (rectangle géographique de capture AIS) et `speed_limit_knots` (limite locale en nœuds = km/h ÷ 1,852). Une clé API [aisstream.io](https://aisstream.io) propre au déploiement est nécessaire.
+2. **Frontend** : copier `frontend/.env.example` en `frontend/.env.local` et renseigner :
+   - `NEXT_PUBLIC_SITE_NAME` (titre de l'onglet et de la page),
+   - `NEXT_PUBLIC_CITY_NAME`, `NEXT_PUBLIC_RIVER_NAME`, `NEXT_PUBLIC_RIVER_WITH_ARTICLE`,
+   - `NEXT_PUBLIC_SPEED_LIMIT_KMH` (doit correspondre au backend),
+   - `NEXT_PUBLIC_MAP_CENTER` et `NEXT_PUBLIC_MAP_ZOOM`,
+   - éventuellement `NEXT_PUBLIC_MAP_ZONES` (JSON de sous-zones cliquables).
+3. **Page « À propos »** : la référence légale (`frontend/app/a-propos/page.tsx`) est intentionnellement spécifique à la juridiction. Réécrire l'arrêté cité et la description de la zone couverte.
+4. Rebuild backend + frontend, déployer comme indiqué dans [`AGENTS.md`](./AGENTS.md).
+
+Aucune migration de schéma n'est requise : chaque déploiement a sa propre base PostgreSQL.
+
 ## Contribuer
 
 Les contributions sont les bienvenues : corrections, ajouts, signalements de données aberrantes (avec captures, MMSI et horodatages, idéalement), idées d'analyses supplémentaires. Ouvrir une issue ou une pull request.

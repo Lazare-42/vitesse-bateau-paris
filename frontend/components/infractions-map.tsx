@@ -13,6 +13,7 @@ import {
 } from "react-leaflet";
 import type { LatLngBoundsExpression, Popup as LPopup } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { SITE } from "@/site.config";
 
 interface Infraction {
   id: number;
@@ -40,43 +41,10 @@ interface Offender {
 const ZONES: {
   name: string;
   bounds: LatLngBoundsExpression;
-}[] = [
-  {
-    name: "Boulogne",
-    bounds: [
-      [48.8385, 2.2565],
-      [48.8585, 2.2875],
-    ],
-  },
-  {
-    name: "Trocadero",
-    bounds: [
-      [48.855, 2.2875],
-      [48.867, 2.3035],
-    ],
-  },
-  {
-    name: "Centre",
-    bounds: [
-      [48.854, 2.3035],
-      [48.865, 2.347],
-    ],
-  },
-  {
-    name: "Bastille",
-    bounds: [
-      [48.846, 2.347],
-      [48.858, 2.369],
-    ],
-  },
-  {
-    name: "Bercy",
-    bounds: [
-      [48.832, 2.369],
-      [48.848, 2.3965],
-    ],
-  },
-];
+}[] = SITE.zones.map((z) => ({
+  name: z.name,
+  bounds: z.bounds as LatLngBoundsExpression,
+}));
 
 function knotsToKmh(knots: number): string {
   return (knots * 1.852).toFixed(1);
@@ -368,34 +336,38 @@ export function InfractionsMap({
       {/* Filters bar */}
       {!soloMode && (
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">Zone :</span>
-            <button
-              onClick={() => handleSelectZone(null)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                !selectedZone
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Toutes
-            </button>
-            {ZONES.map((zone) => (
+          {ZONES.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Zone :</span>
               <button
-                key={zone.name}
-                onClick={() =>
-                  handleSelectZone(selectedZone === zone.name ? null : zone.name)
-                }
+                onClick={() => handleSelectZone(null)}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  selectedZone === zone.name
+                  !selectedZone
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {zone.name}
+                Toutes
               </button>
-            ))}
-          </div>
+              {ZONES.map((zone) => (
+                <button
+                  key={zone.name}
+                  onClick={() =>
+                    handleSelectZone(selectedZone === zone.name ? null : zone.name)
+                  }
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    selectedZone === zone.name
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {zone.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div />
+          )}
 
           <select
             value={selectedMmsi}
@@ -414,8 +386,8 @@ export function InfractionsMap({
 
       <div className="rounded-lg overflow-hidden border">
         <MapContainer
-          center={[48.8566, 2.335]}
-          zoom={13}
+          center={SITE.mapCenter}
+          zoom={SITE.mapZoom}
           className="h-[50vh] sm:h-[70vh] w-full"
           attributionControl={false}
         >
@@ -423,7 +395,7 @@ export function InfractionsMap({
           <ClearZoneOnClick onClear={() => handleSelectZone(null)} />
           <FlyToInfraction infraction={focusedInfraction} />
 
-          {/* Seine zones — hidden in solo mode */}
+          {/* Sub-zones (from site.config) — hidden in solo mode */}
           {!soloMode &&
             ZONES.map((zone) => (
               <Rectangle

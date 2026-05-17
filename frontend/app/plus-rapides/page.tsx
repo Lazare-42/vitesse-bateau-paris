@@ -1,5 +1,6 @@
 import { FastestTable, type FastestEver } from "@/components/fastest-table";
 import { MethodologyNote } from "@/components/methodology-note";
+import { SITE } from "@/site.config";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function PlusRapidesPage() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Classement de tous les bateaux par leur vitesse maximale jamais
-          enregistree sur la Seine a Paris.
+          enregistree sur la {SITE.river} a {SITE.city}.
         </p>
       </div>
 

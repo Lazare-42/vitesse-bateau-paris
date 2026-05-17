@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { SITE } from "@/site.config";
 
 export const metadata: Metadata = {
-  title: "A propos - Vitesse Bateau Paris",
+  title: `A propos - ${SITE.name}`,
 };
 
 export default function AProposPage() {

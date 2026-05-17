@@ -66,6 +66,16 @@ make lint           # golangci-lint run
 cd frontend && npx tsc --noEmit   # frontend typecheck
 ```
 
+## Forking to a different zone (Marne, Rhône, etc.)
+
+The site is single-zone-per-deployment. Zone-specific values are centralized in **`frontend/site.config.ts`**, fed by `NEXT_PUBLIC_*` env vars at build time. To fork:
+
+- `frontend/.env.local` (copy from `.env.example`): set site name, city, river, river-with-article, speed limit in km/h, map center, map zoom, optional sub-zones JSON.
+- `config.toml`: update `bbox` and `speed_limit_knots`. Speed limit must match the frontend's `NEXT_PUBLIC_SPEED_LIMIT_KMH` ÷ 1.852.
+- `frontend/app/a-propos/page.tsx`: rewrite the legal-reference paragraph (different jurisdiction = different *arrêté*) and the geographic-bounds sentence. Deliberately not templated.
+
+Each fork has its own Postgres database; no multi-tenant schema.
+
 ## Methodology constants worth knowing
 
 - **Speed limit**: 12 km/h (6.5 knots). Hardcoded in the ingest path.
