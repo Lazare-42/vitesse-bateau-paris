@@ -93,4 +93,4 @@ Les contributions sont les bienvenues : corrections, ajouts, signalements de don
 
 ## Licence
 
-À préciser.
+[MIT](./LICENSE).
