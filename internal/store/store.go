@@ -82,6 +82,9 @@ type Offender struct {
 	LastInfractionAt          time.Time `json:"last_infraction_at"`
 	CumulativeExcess          float64   `json:"cumulative_excess_knots"`
 	AvgInfractionDurationSecs float64   `json:"avg_infraction_duration_seconds"`
+	// TotalExcessSeconds: sum of all sustained-infraction durations for the
+	// vessel. Numerator of ExcessTimeRatio (so ratio = total / time_in_zone).
+	TotalExcessSeconds float64 `json:"total_excess_seconds"`
 	// ExcessTimeRatio: fraction of time spent in excess while in the zone.
 	// Numerator: sum of sustained-infraction durations (>=30s).
 	// Denominator: sum of gaps between consecutive position pings,
@@ -181,6 +184,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		       MAX(i.ended_at) as last_infraction,
 		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess,
 		       AVG(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as avg_duration_seconds,
+		       SUM(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as total_excess_seconds,
 		       CASE
 		         WHEN COALESCE(p.time_in_zone_seconds, 0) > 0
 		         THEN SUM(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) / p.time_in_zone_seconds
@@ -195,7 +199,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		  -- always score 100%).
 		  AND p.time_in_zone_seconds >= 600
 		GROUP BY i.mmsi, v.name, p.time_in_zone_seconds
-		ORDER BY excess_ratio DESC, cumulative_excess DESC
+		ORDER BY excess_ratio DESC, total_excess_seconds DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -208,7 +212,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		var o Offender
 		if err := rows.Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
 			&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
-			&o.AvgInfractionDurationSecs, &o.ExcessTimeRatio); err != nil {
+			&o.AvgInfractionDurationSecs, &o.TotalExcessSeconds, &o.ExcessTimeRatio); err != nil {
 			return nil, err
 		}
 		offenders = append(offenders, o)
@@ -234,6 +238,7 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		       MAX(i.ended_at) as last_infraction,
 		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess,
 		       AVG(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as avg_duration_seconds,
+		       SUM(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as total_excess_seconds,
 		       CASE
 		         WHEN COALESCE((SELECT time_in_zone_seconds FROM vessel_presence), 0) > 0
 		         THEN SUM(EXTRACT(EPOCH FROM (i.ended_at - i.started_at)))
@@ -246,7 +251,7 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		GROUP BY i.mmsi, v.name
 	`, mmsi).Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
 		&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
-		&o.AvgInfractionDurationSecs, &o.ExcessTimeRatio)
+		&o.AvgInfractionDurationSecs, &o.TotalExcessSeconds, &o.ExcessTimeRatio)
 	if err == sql.ErrNoRows {
 		return nil, nil, nil
 	}

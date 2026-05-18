@@ -14,6 +14,7 @@ interface Offender {
   last_infraction_at: string;
   cumulative_excess_knots: number;
   avg_infraction_duration_seconds: number;
+  total_excess_seconds: number;
   excess_time_ratio: number;
 }
 
@@ -36,7 +37,7 @@ function knotsFromKmh(kmh: number): number {
 type SortKey =
   | "excess_time_ratio"
   | "avg_infraction_duration_seconds"
-  | "cumulative_excess_knots"
+  | "total_excess_seconds"
   | "infraction_count"
   | "max_speed_knots"
   | "avg_speed_knots"
@@ -65,6 +66,20 @@ function formatDuration(seconds: number): string {
   return r === 0 ? `${m} min` : `${m} min ${r}s`;
 }
 
+function formatLongDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  if (h < 24) return remM === 0 ? `${h}h` : `${h}h ${remM}min`;
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  return remH === 0 ? `${d}j` : `${d}j ${remH}h`;
+}
+
 function formatPercent(ratio: number): string {
   if (!Number.isFinite(ratio) || ratio <= 0) return "—";
   const pct = ratio * 100;
@@ -78,11 +93,15 @@ const columns: { key: SortKey; label: string; shortLabel: string }[] = [
     shortLabel: "% exces",
   },
   {
+    key: "total_excess_seconds",
+    label: "Temps total en exces",
+    shortLabel: "Total temps",
+  },
+  {
     key: "avg_infraction_duration_seconds",
     label: "Duree moy. en exces",
     shortLabel: "Duree moy.",
   },
-  { key: "cumulative_excess_knots", label: "Total au-dessus de la limite", shortLabel: "Total exces" },
   { key: "infraction_count", label: "Nb. exces", shortLabel: "Nb." },
   { key: "max_speed_knots", label: "Vitesse max", shortLabel: "V. max" },
   {
@@ -161,14 +180,14 @@ function aggregateOffenders(
       (sum, i) => sum + (i.avg_speed_knots - i.speed_limit_knots),
       0,
     );
-    const avgDuration =
-      infs.reduce(
-        (sum, i) =>
-          sum +
-          (new Date(i.ended_at).getTime() - new Date(i.started_at).getTime()) /
-            1000,
-        0,
-      ) / infs.length;
+    const totalDuration = infs.reduce(
+      (sum, i) =>
+        sum +
+        (new Date(i.ended_at).getTime() - new Date(i.started_at).getTime()) /
+          1000,
+      0,
+    );
+    const avgDuration = totalDuration / infs.length;
     result.push({
       mmsi,
       vessel_name: infs[0].vessel_name,
@@ -178,6 +197,7 @@ function aggregateOffenders(
       last_infraction_at: lastAt,
       cumulative_excess_knots: cumulativeExcess,
       avg_infraction_duration_seconds: avgDuration,
+      total_excess_seconds: totalDuration,
       // The ratio is per-vessel (time-in-excess / time-in-zone) and can't
       // be recomputed client-side without positions data, so we pass the
       // global value through from the server-rendered offenders list.
@@ -369,13 +389,11 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                 <td className="py-3 h-10 px-3 text-right font-medium text-speed-danger">
                   {formatPercent(o.excess_time_ratio)}
                 </td>
+                <td className="py-3 h-10 px-3 text-right font-medium text-speed-danger">
+                  {formatLongDuration(o.total_excess_seconds)}
+                </td>
                 <td className="py-3 h-10 px-3 text-right text-speed-warning">
                   {formatDuration(o.avg_infraction_duration_seconds)}
-                </td>
-                <td className="py-3 h-10 px-3 text-right">
-                  <span className="inline-flex items-center rounded-md bg-speed-danger/10 px-2 py-0.5 text-xs font-medium text-speed-danger">
-                    +{knotsToKmh(o.cumulative_excess_knots)}
-                  </span>
                 </td>
                 <td className="py-3 h-10 px-3 text-right">
                   {o.infraction_count}
@@ -426,6 +444,14 @@ export function OffendersTable({ data }: { data: Offender[] }) {
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground">
+                    Temps total en exces
+                  </p>
+                  <p className="font-medium text-speed-danger">
+                    {formatLongDuration(o.total_excess_seconds)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">
                     Duree moy. en exces
                   </p>
                   <p className="text-speed-warning">
@@ -441,12 +467,6 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                 <div>
                   <p className="text-xs text-muted-foreground">Nb. exces</p>
                   <p>{o.infraction_count}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">
-                    Total au-dessus de la limite
-                  </p>
-                  <p>+{knotsToKmh(o.cumulative_excess_knots)} km/h</p>
                 </div>
               </div>
             </Link>

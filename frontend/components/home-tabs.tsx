@@ -25,6 +25,7 @@ interface Offender {
   last_infraction_at: string;
   cumulative_excess_knots: number;
   avg_infraction_duration_seconds: number;
+  total_excess_seconds: number;
   excess_time_ratio: number;
 }
 
