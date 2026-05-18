@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { CarteLink } from "./carte-link";
+import { BASE_PATH } from "@/site.config";
 
 interface Infraction {
   id: number;
@@ -149,7 +150,7 @@ export function ViolationsTable({
     try {
       const params = new URLSearchParams({ limit: "2000" });
       if (hours > 0) params.set("since_hours", String(hours));
-      const res = await fetch(`/api/infractions?${params.toString()}`);
+      const res = await fetch(`${BASE_PATH}/api/infractions?${params.toString()}`);
       if (res.ok) setRefetched(await res.json());
     } catch {
       // keep previous data

@@ -98,3 +98,8 @@ export const SITE = {
 } as const;
 
 export const SPEED_LIMIT_KNOTS = SITE.speedLimitKmh / 1.852;
+
+// basePath prefix for sub-path deployments (e.g. "/marne"). Empty string
+// when the site is mounted at the domain root. Must mirror the basePath in
+// next.config.ts (also driven by NEXT_PUBLIC_BASE_PATH).
+export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";

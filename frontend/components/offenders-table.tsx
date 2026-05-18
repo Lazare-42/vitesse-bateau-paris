@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CarteLink } from "./carte-link";
+import { BASE_PATH } from "@/site.config";
 
 interface Offender {
   mmsi: number;
@@ -153,7 +154,7 @@ export function OffendersTable({ data }: { data: Offender[] }) {
     fetchedRef.current = true;
     setLoading(true);
     try {
-      const res = await fetch("/api/infractions?limit=10000");
+      const res = await fetch(`${BASE_PATH}/api/infractions?limit=10000`);
       if (res.ok) {
         setAllInfractions(await res.json());
       }
