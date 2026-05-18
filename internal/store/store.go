@@ -92,6 +92,17 @@ type Offender struct {
 	ExcessTimeRatio float64 `json:"excess_time_ratio"`
 }
 
+// LivePosition is the latest position of a vessel for the real-time map.
+type LivePosition struct {
+	MMSI       int       `json:"mmsi"`
+	VesselName string    `json:"vessel_name"`
+	Latitude   float64   `json:"latitude"`
+	Longitude  float64   `json:"longitude"`
+	SpeedKnots float64   `json:"speed_knots"`
+	Course     float64   `json:"course"`
+	ReceivedAt time.Time `json:"received_at"`
+}
+
 type Stats struct {
 	TotalVesselsTracked  int     `json:"total_vessels_tracked"`
 	TotalPositions       int64   `json:"total_positions"`
@@ -438,6 +449,36 @@ func (s *Store) FastestVessels(ctx context.Context, limit int) ([]VesselSpeedRow
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+// LivePositions returns the latest position per vessel seen in the last
+// `sinceMinutes` minutes. Used by the real-time map.
+func (s *Store) LivePositions(ctx context.Context, sinceMinutes int) ([]LivePosition, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT ON (p.mmsi)
+		       p.mmsi,
+		       COALESCE(NULLIF(v.name, ''), '') as vessel_name,
+		       p.latitude, p.longitude, p.speed_knots, p.course, p.received_at
+		FROM positions p
+		LEFT JOIN vessels v ON p.mmsi = v.mmsi
+		WHERE p.received_at >= NOW() - make_interval(mins => $1)
+		ORDER BY p.mmsi, p.received_at DESC
+	`, sinceMinutes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []LivePosition
+	for rows.Next() {
+		var p LivePosition
+		if err := rows.Scan(&p.MMSI, &p.VesselName, &p.Latitude, &p.Longitude,
+			&p.SpeedKnots, &p.Course, &p.ReceivedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // UnnamedVessels returns MMSIs of vessels with empty names, limited to n results.

@@ -46,6 +46,7 @@ func (s *Server) setupRouter() {
 		r.Get("/infractions", s.handleInfractions)
 		r.Get("/infractions/{id}", s.handleInfractionDetail)
 		r.Get("/fastest", s.handleFastest)
+		r.Get("/live", s.handleLive)
 	})
 
 	s.router = r

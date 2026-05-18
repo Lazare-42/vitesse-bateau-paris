@@ -127,6 +127,27 @@ func (s *Server) handleFastest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rows)
 }
 
+func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
+	sinceMinutes := queryInt(r, "since_minutes", 10)
+	if sinceMinutes < 1 {
+		sinceMinutes = 10
+	}
+	if sinceMinutes > 60 {
+		sinceMinutes = 60
+	}
+
+	positions, err := s.store.LivePositions(r.Context(), sinceMinutes)
+	if err != nil {
+		s.logger.Error("get live positions", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if positions == nil {
+		positions = []store.LivePosition{}
+	}
+	writeJSON(w, http.StatusOK, positions)
+}
+
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
