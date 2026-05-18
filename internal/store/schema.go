@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS positions (
 
 CREATE INDEX IF NOT EXISTS idx_positions_mmsi ON positions(mmsi);
 CREATE INDEX IF NOT EXISTS idx_positions_received_at ON positions(received_at);
+CREATE INDEX IF NOT EXISTS idx_positions_mmsi_received_at ON positions(mmsi, received_at);
 
 CREATE TABLE IF NOT EXISTS infractions (
     id                BIGSERIAL PRIMARY KEY,

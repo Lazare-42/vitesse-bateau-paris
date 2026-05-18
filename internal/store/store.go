@@ -15,6 +15,24 @@ import (
 // disrupted) do not count as real speeding events. Tables must be aliased `i`.
 const sustainedFilter = `(i.ended_at - i.started_at) >= INTERVAL '30 seconds'`
 
+// presenceCTE computes per-vessel total time-in-zone (seconds) by summing
+// gaps between consecutive position pings. Gaps over 15 min are treated as
+// the vessel leaving the zone and are excluded. Subsample of 1 ping per 5 min
+// means typical gap is ~5 min; in-infraction pings are full-rate so they
+// contribute too. Used as the denominator for excess_time_ratio.
+const presenceCTE = `
+presence AS (
+  SELECT mmsi,
+         SUM(EXTRACT(EPOCH FROM gap)) AS time_in_zone_seconds
+  FROM (
+    SELECT mmsi,
+           received_at - LAG(received_at) OVER (PARTITION BY mmsi ORDER BY received_at) AS gap
+    FROM positions
+  ) g
+  WHERE gap IS NOT NULL AND gap < INTERVAL '15 minutes'
+  GROUP BY mmsi
+)`
+
 type Store struct {
 	db *sql.DB
 }
@@ -56,14 +74,19 @@ type Infraction struct {
 }
 
 type Offender struct {
-	MMSI                       int       `json:"mmsi"`
-	VesselName                 string    `json:"vessel_name"`
-	InfractionCount            int       `json:"infraction_count"`
-	MaxSpeedKnots              float64   `json:"max_speed_knots"`
-	AvgSpeedKnots              float64   `json:"avg_speed_knots"`
-	LastInfractionAt           time.Time `json:"last_infraction_at"`
-	CumulativeExcess           float64   `json:"cumulative_excess_knots"`
-	AvgInfractionDurationSecs  float64   `json:"avg_infraction_duration_seconds"`
+	MMSI                      int       `json:"mmsi"`
+	VesselName                string    `json:"vessel_name"`
+	InfractionCount           int       `json:"infraction_count"`
+	MaxSpeedKnots             float64   `json:"max_speed_knots"`
+	AvgSpeedKnots             float64   `json:"avg_speed_knots"`
+	LastInfractionAt          time.Time `json:"last_infraction_at"`
+	CumulativeExcess          float64   `json:"cumulative_excess_knots"`
+	AvgInfractionDurationSecs float64   `json:"avg_infraction_duration_seconds"`
+	// ExcessTimeRatio: fraction of time spent in excess while in the zone.
+	// Numerator: sum of sustained-infraction durations (>=30s).
+	// Denominator: sum of gaps between consecutive position pings,
+	// counting only gaps under 15 minutes (longer gaps = boat left the zone).
+	ExcessTimeRatio float64 `json:"excess_time_ratio"`
 }
 
 type Stats struct {
@@ -150,18 +173,29 @@ func (s *Store) InsertInfraction(ctx context.Context, inf *Infraction) error {
 
 func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error) {
 	rows, err := s.db.QueryContext(ctx, `
+		WITH `+presenceCTE+`
 		SELECT i.mmsi,
 		       COALESCE(NULLIF(v.name, ''), MAX(i.vessel_name), '') as vessel_name,
 		       COUNT(*) as infraction_count,
 		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
 		       MAX(i.ended_at) as last_infraction,
 		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess,
-		       AVG(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as avg_duration_seconds
+		       AVG(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as avg_duration_seconds,
+		       CASE
+		         WHEN COALESCE(p.time_in_zone_seconds, 0) > 0
+		         THEN SUM(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) / p.time_in_zone_seconds
+		         ELSE 0
+		       END as excess_ratio
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
+		LEFT JOIN presence p ON i.mmsi = p.mmsi
 		WHERE `+sustainedFilter+`
-		GROUP BY i.mmsi, v.name
-		ORDER BY avg_duration_seconds DESC, cumulative_excess DESC
+		  -- Require at least 10 minutes of observed presence: otherwise the
+		  -- ratio is meaningless (boats seen only during one infraction
+		  -- always score 100%).
+		  AND p.time_in_zone_seconds >= 600
+		GROUP BY i.mmsi, v.name, p.time_in_zone_seconds
+		ORDER BY excess_ratio DESC, cumulative_excess DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -174,7 +208,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		var o Offender
 		if err := rows.Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
 			&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
-			&o.AvgInfractionDurationSecs); err != nil {
+			&o.AvgInfractionDurationSecs, &o.ExcessTimeRatio); err != nil {
 			return nil, err
 		}
 		offenders = append(offenders, o)
@@ -185,20 +219,34 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infraction, error) {
 	o := &Offender{}
 	err := s.db.QueryRowContext(ctx, `
+		WITH vessel_presence AS (
+		  SELECT SUM(EXTRACT(EPOCH FROM gap)) AS time_in_zone_seconds
+		  FROM (
+		    SELECT received_at - LAG(received_at) OVER (ORDER BY received_at) AS gap
+		    FROM positions WHERE mmsi = $1
+		  ) g
+		  WHERE gap IS NOT NULL AND gap < INTERVAL '15 minutes'
+		)
 		SELECT i.mmsi,
 		       COALESCE(NULLIF(v.name, ''), MAX(i.vessel_name), '') as vessel_name,
 		       COUNT(*) as infraction_count,
 		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
 		       MAX(i.ended_at) as last_infraction,
 		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess,
-		       AVG(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as avg_duration_seconds
+		       AVG(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as avg_duration_seconds,
+		       CASE
+		         WHEN COALESCE((SELECT time_in_zone_seconds FROM vessel_presence), 0) > 0
+		         THEN SUM(EXTRACT(EPOCH FROM (i.ended_at - i.started_at)))
+		              / (SELECT time_in_zone_seconds FROM vessel_presence)
+		         ELSE 0
+		       END as excess_ratio
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
 		WHERE i.mmsi = $1 AND `+sustainedFilter+`
 		GROUP BY i.mmsi, v.name
 	`, mmsi).Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
 		&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
-		&o.AvgInfractionDurationSecs)
+		&o.AvgInfractionDurationSecs, &o.ExcessTimeRatio)
 	if err == sql.ErrNoRows {
 		return nil, nil, nil
 	}

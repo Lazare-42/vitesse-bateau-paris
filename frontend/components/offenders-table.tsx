@@ -14,6 +14,7 @@ interface Offender {
   last_infraction_at: string;
   cumulative_excess_knots: number;
   avg_infraction_duration_seconds: number;
+  excess_time_ratio: number;
 }
 
 interface Infraction {
@@ -33,6 +34,7 @@ function knotsFromKmh(kmh: number): number {
 }
 
 type SortKey =
+  | "excess_time_ratio"
   | "avg_infraction_duration_seconds"
   | "cumulative_excess_knots"
   | "infraction_count"
@@ -55,6 +57,7 @@ function formatDate(iso: string): string {
 }
 
 function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds)) return "—";
   const s = Math.round(seconds);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -62,7 +65,18 @@ function formatDuration(seconds: number): string {
   return r === 0 ? `${m} min` : `${m} min ${r}s`;
 }
 
+function formatPercent(ratio: number): string {
+  if (!Number.isFinite(ratio) || ratio <= 0) return "—";
+  const pct = ratio * 100;
+  return pct >= 10 ? `${pct.toFixed(0)} %` : `${pct.toFixed(1)} %`;
+}
+
 const columns: { key: SortKey; label: string; shortLabel: string }[] = [
+  {
+    key: "excess_time_ratio",
+    label: "% du temps en exces",
+    shortLabel: "% exces",
+  },
   {
     key: "avg_infraction_duration_seconds",
     label: "Duree moy. en exces",
@@ -124,7 +138,10 @@ function SortIcon({
   );
 }
 
-function aggregateOffenders(infractions: Infraction[]): Offender[] {
+function aggregateOffenders(
+  infractions: Infraction[],
+  ratioByMmsi: Map<number, number>,
+): Offender[] {
   const byMmsi = new Map<number, Infraction[]>();
   for (const inf of infractions) {
     const list = byMmsi.get(inf.mmsi);
@@ -161,15 +178,19 @@ function aggregateOffenders(infractions: Infraction[]): Offender[] {
       last_infraction_at: lastAt,
       cumulative_excess_knots: cumulativeExcess,
       avg_infraction_duration_seconds: avgDuration,
+      // The ratio is per-vessel (time-in-excess / time-in-zone) and can't
+      // be recomputed client-side without positions data, so we pass the
+      // global value through from the server-rendered offenders list.
+      // It overstates the ratio when the speed-threshold filter is on
+      // (it's still the all-speeds ratio), which is an acceptable limit.
+      excess_time_ratio: ratioByMmsi.get(mmsi) ?? 0,
     });
   }
   return result;
 }
 
 export function OffendersTable({ data }: { data: Offender[] }) {
-  const [sortKey, setSortKey] = useState<SortKey>(
-    "avg_infraction_duration_seconds",
-  );
+  const [sortKey, setSortKey] = useState<SortKey>("excess_time_ratio");
   const [desc, setDesc] = useState(true);
   const [minSpeedKmh, setMinSpeedKmh] = useState(0);
   const [allInfractions, setAllInfractions] = useState<Infraction[] | null>(null);
@@ -199,14 +220,20 @@ export function OffendersTable({ data }: { data: Offender[] }) {
     }
   }
 
+  const ratioByMmsi = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const o of data) m.set(o.mmsi, o.excess_time_ratio);
+    return m;
+  }, [data]);
+
   const effectiveData = useMemo(() => {
     if (minSpeedKmh === 0 || !allInfractions) return data;
     const minKnots = knotsFromKmh(minSpeedKmh);
     const filtered = allInfractions.filter(
       (inf) => inf.max_speed_knots >= minKnots,
     );
-    return aggregateOffenders(filtered);
-  }, [data, allInfractions, minSpeedKmh]);
+    return aggregateOffenders(filtered, ratioByMmsi);
+  }, [data, allInfractions, minSpeedKmh, ratioByMmsi]);
 
   const sorted = useMemo(() => {
     return [...effectiveData].sort((a, b) => {
@@ -340,6 +367,9 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                   </Link>
                 </td>
                 <td className="py-3 h-10 px-3 text-right font-medium text-speed-danger">
+                  {formatPercent(o.excess_time_ratio)}
+                </td>
+                <td className="py-3 h-10 px-3 text-right text-speed-warning">
                   {formatDuration(o.avg_infraction_duration_seconds)}
                 </td>
                 <td className="py-3 h-10 px-3 text-right">
@@ -390,10 +420,18 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                   </p>
                 </div>
                 <span className="inline-flex items-center rounded-md bg-speed-danger/10 px-2 py-0.5 text-xs font-medium text-speed-danger">
-                  {formatDuration(o.avg_infraction_duration_seconds)} en exces (moy.)
+                  {formatPercent(o.excess_time_ratio)} du temps en exces
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Duree moy. en exces
+                  </p>
+                  <p className="text-speed-warning">
+                    {formatDuration(o.avg_infraction_duration_seconds)}
+                  </p>
+                </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Vitesse max</p>
                   <p className="font-medium text-speed-danger">
@@ -408,15 +446,7 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                   <p className="text-xs text-muted-foreground">
                     Total au-dessus de la limite
                   </p>
-                  <p>+{knotsToKmh(o.cumulative_excess_knots)} km/h cumule</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">
-                    Vitesse moy. en exces
-                  </p>
-                  <p className="text-speed-warning">
-                    {knotsToKmh(o.avg_speed_knots)} km/h
-                  </p>
+                  <p>+{knotsToKmh(o.cumulative_excess_knots)} km/h</p>
                 </div>
               </div>
             </Link>

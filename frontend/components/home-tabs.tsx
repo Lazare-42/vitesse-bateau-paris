@@ -25,6 +25,7 @@ interface Offender {
   last_infraction_at: string;
   cumulative_excess_knots: number;
   avg_infraction_duration_seconds: number;
+  excess_time_ratio: number;
 }
 
 interface Infraction {
@@ -128,13 +129,12 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
           aria-labelledby="tab-rois"
         >
           <p className="mb-4 text-xs text-muted-foreground">
-            Classe par defaut sur la duree moyenne en exces : pour chaque
-            bateau, on prend la duree de chacun de ses exces (debut &rarr;
-            retour sous la limite) et on en fait la moyenne. Plus un bateau
-            soutient sa vitesse au-dessus de {SITE.speedLimitKmh} km/h
-            longtemps a chaque fois, plus il monte. Les autres colonnes
-            (nombre d&apos;exces, vitesse max, total cumule, etc.) restent
-            triables.
+            Classe par defaut sur le pourcentage de temps en exces :
+            (duree totale en exces) divisee par (temps total passe dans la
+            zone). Plus un bateau roule au-dessus de {SITE.speedLimitKmh}{" "}
+            km/h pendant qu&apos;il est suivi en AIS, plus il monte. Les
+            autres colonnes (duree moyenne par exces, total cumule, nombre
+            d&apos;exces, vitesse max, etc.) restent triables.
           </p>
           <OffendersTable data={offenders} />
         </section>
