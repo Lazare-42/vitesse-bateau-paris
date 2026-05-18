@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/lazrossi/vitesse-bateau-paris/internal/broadcast"
 	"github.com/lazrossi/vitesse-bateau-paris/internal/store"
 )
 
@@ -46,10 +47,11 @@ type Client struct {
 	speedLimit float64    // knots
 	store      *store.Store
 	logger     *slog.Logger
+	hub        *broadcast.Hub // nil-safe; broadcasts every validated position
 
 	mu       sync.Mutex
-	lastSave map[int]time.Time          // mmsi -> last non-violation position save
-	sessions map[int]*activeSession      // mmsi -> active speeding session
+	lastSave map[int]time.Time           // mmsi -> last non-violation position save
+	sessions map[int]*activeSession       // mmsi -> active speeding session
 }
 
 // AIS protocol types
@@ -82,12 +84,13 @@ type shipStaticData struct {
 	Type     int    `json:"Type"`
 }
 
-func NewClient(apiKey string, bbox [4]float64, speedLimit float64, s *store.Store, logger *slog.Logger) *Client {
+func NewClient(apiKey string, bbox [4]float64, speedLimit float64, s *store.Store, hub *broadcast.Hub, logger *slog.Logger) *Client {
 	return &Client{
 		apiKey:     apiKey,
 		bbox:       bbox,
 		speedLimit: speedLimit,
 		store:      s,
+		hub:        hub,
 		logger:     logger,
 		lastSave:   make(map[int]time.Time),
 		sessions:   make(map[int]*activeSession),
@@ -242,6 +245,23 @@ func (c *Client) handlePosition(ctx context.Context, msg *aisStreamMessage, ship
 	if err := c.store.UpsertVessel(ctx, pos.UserID, shipName, "", 0); err != nil {
 		c.logger.Error("upsert vessel", "error", err, "mmsi", pos.UserID)
 		return
+	}
+
+	// Push live update to subscribed WS clients, regardless of DB-storage
+	// throttling. The map shouldn't have to wait for the 5-min subsample.
+	if c.hub != nil {
+		live := store.LivePosition{
+			MMSI:       pos.UserID,
+			VesselName: shipName,
+			Latitude:   pos.Latitude,
+			Longitude:  pos.Longitude,
+			SpeedKnots: pos.Sog,
+			Course:     pos.Cog,
+			ReceivedAt: time.Now(),
+		}
+		if b, err := json.Marshal(live); err == nil {
+			c.hub.Broadcast(b)
+		}
 	}
 
 	isSpeeding := pos.Sog > c.speedLimit

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -31,9 +31,10 @@ function formatAge(iso: string): string {
   return `il y a ${m} min`;
 }
 
-const POLL_MS = 30_000;
-const STALE_MS = 3 * 60_000; // mark gray if last seen > 3 min ago
+const STALE_MS = 3 * 60_000; // mark gray after 3 min without updates
+const PRUNE_MS = 15 * 60_000; // drop entirely after 15 min
 const WARNING_RATIO = 0.95; // amber if speed within 5% of limit
+const POLL_FALLBACK_MS = 5_000; // when WS is down, hit /api/live this often
 
 type Bucket = "speeding" | "warning" | "ok" | "stale";
 
@@ -55,67 +56,190 @@ const BUCKET_STYLE: Record<
   stale: { color: "#6b7280", fill: "#6b7280", radius: 5, weight: 1 },
 };
 
-export function LiveMap() {
-  const [positions, setPositions] = useState<LivePosition[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastFetched, setLastFetched] = useState<number>(0);
+type ConnectionState = "connecting" | "open" | "polling" | "error";
 
+export function LiveMap() {
+  const [positions, setPositions] = useState<Map<number, LivePosition>>(
+    () => new Map(),
+  );
+  const [conn, setConn] = useState<ConnectionState>("connecting");
+  const [lastUpdate, setLastUpdate] = useState(0);
+  // Re-render every 30 s so the "stale" colouring and the "il y a Xs" age
+  // strings refresh even when no message arrives.
+  const [tick, setTick] = useState(0);
   useEffect(() => {
-    let cancelled = false;
-    async function fetchOnce() {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Imperative refs for the WS pipeline so reconnect logic isn't tied to
+  // a particular render.
+  const wsRef = useRef<WebSocket | null>(null);
+  const pollIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const backoffRef = useRef(1000);
+  const cancelledRef = useRef(false);
+
+  function applyOne(p: LivePosition) {
+    setPositions((prev) => {
+      const next = new Map(prev);
+      next.set(p.mmsi, p);
+      return next;
+    });
+    setLastUpdate(Date.now());
+  }
+
+  function applySnapshot(arr: LivePosition[]) {
+    const next = new Map<number, LivePosition>();
+    for (const p of arr) next.set(p.mmsi, p);
+    setPositions(next);
+    setLastUpdate(Date.now());
+  }
+
+  function stopPolling() {
+    if (pollIdRef.current) {
+      clearInterval(pollIdRef.current);
+      pollIdRef.current = null;
+    }
+  }
+
+  function startPolling() {
+    if (pollIdRef.current) return;
+    setConn("polling");
+    const tick = async () => {
       try {
         const res = await fetch(`${BASE_PATH}/api/live?since_minutes=10`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as LivePosition[];
-        if (cancelled) return;
-        setPositions(data);
-        setError(null);
-        setLastFetched(Date.now());
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (res.ok) applySnapshot(await res.json());
+      } catch {
+        // keep trying
+      }
+    };
+    tick();
+    pollIdRef.current = setInterval(tick, POLL_FALLBACK_MS);
+  }
+
+  useEffect(() => {
+    cancelledRef.current = false;
+
+    async function snapshot() {
+      try {
+        const res = await fetch(`${BASE_PATH}/api/live?since_minutes=10`);
+        if (res.ok) applySnapshot(await res.json());
+      } catch {
+        // ignore; WS may still come up
       }
     }
-    fetchOnce();
-    const id = setInterval(fetchOnce, POLL_MS);
+
+    function connect() {
+      if (cancelledRef.current) return;
+      setConn("connecting");
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const url = `${proto}//${window.location.host}${BASE_PATH}/api/ws/live`;
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setConn("open");
+        backoffRef.current = 1000;
+        stopPolling();
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const p = JSON.parse(ev.data) as LivePosition;
+          applyOne(p);
+        } catch {
+          // skip malformed
+        }
+      };
+      ws.onerror = () => {
+        // onclose will fire next; handle there.
+      };
+      ws.onclose = () => {
+        if (cancelledRef.current) return;
+        // Fall back to polling so the map keeps updating during the
+        // reconnect window, then try to re-open WS with backoff.
+        startPolling();
+        const delay = Math.min(backoffRef.current, 15_000);
+        backoffRef.current = Math.min(backoffRef.current * 2, 15_000);
+        setTimeout(connect, delay);
+      };
+    }
+
+    snapshot();
+    connect();
+
     return () => {
-      cancelled = true;
-      clearInterval(id);
+      cancelledRef.current = true;
+      stopPolling();
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Prune very stale vessels so the map doesn't accumulate grey markers
+  // forever for boats that have left.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = Date.now();
+      setPositions((prev) => {
+        let dropped = false;
+        const next = new Map(prev);
+        for (const [mmsi, p] of prev) {
+          if (now - new Date(p.received_at).getTime() > PRUNE_MS) {
+            next.delete(mmsi);
+            dropped = true;
+          }
+        }
+        return dropped ? next : prev;
+      });
+    }, 60_000);
+    return () => clearInterval(id);
   }, []);
 
   const counts = useMemo(() => {
-    const c = { speeding: 0, warning: 0, ok: 0, stale: 0, total: positions.length };
-    for (const p of positions) c[bucketize(p)]++;
+    const c = { speeding: 0, warning: 0, ok: 0, stale: 0, total: positions.size };
+    for (const p of positions.values()) c[bucketize(p)]++;
     return c;
-  }, [positions]);
+    // tick is read to force recomputation as time advances
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions, tick]);
+
+  const statusLine = (() => {
+    if (conn === "open")
+      return (
+        <>
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            en direct
+          </span>
+        </>
+      );
+    if (conn === "polling")
+      return <span className="text-amber-500">connexion temps reel perdue (polling)</span>;
+    if (conn === "error")
+      return <span className="text-speed-danger">erreur de connexion</span>;
+    return "connexion...";
+  })();
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-3 text-xs">
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+        <span className="text-muted-foreground">{statusLine}</span>
         <span className="text-muted-foreground">
-          {loading
-            ? "Chargement..."
-            : error
-              ? <span className="text-speed-danger">Erreur : {error}</span>
-              : <>
-                  <span className="font-medium text-foreground">
-                    {counts.total}
-                  </span>{" "}
-                  bateau{counts.total !== 1 ? "x" : ""} visible
-                  {counts.total !== 1 ? "s" : ""}
-                  {lastFetched > 0 && (
-                    <>
-                      {" "}
-                      &middot;{" "}
-                      <span suppressHydrationWarning>
-                        màj {new Date(lastFetched).toLocaleTimeString("fr-FR")}
-                      </span>
-                    </>
-                  )}
-                </>}
+          &middot;{" "}
+          <span className="font-medium text-foreground">{counts.total}</span>{" "}
+          bateau{counts.total !== 1 ? "x" : ""}
+          {lastUpdate > 0 && (
+            <>
+              {" "}
+              &middot;{" "}
+              <span suppressHydrationWarning>
+                maj {new Date(lastUpdate).toLocaleTimeString("fr-FR")}
+              </span>
+            </>
+          )}
         </span>
         <span className="inline-flex items-center gap-1">
           <span
@@ -155,7 +279,7 @@ export function LiveMap() {
           attributionControl={false}
         >
           <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-          {positions.map((p) => {
+          {Array.from(positions.values()).map((p) => {
             const b = bucketize(p);
             const style = BUCKET_STYLE[b];
             return (
