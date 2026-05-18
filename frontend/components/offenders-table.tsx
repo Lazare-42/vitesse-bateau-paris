@@ -13,6 +13,7 @@ interface Offender {
   avg_speed_knots: number;
   last_infraction_at: string;
   cumulative_excess_knots: number;
+  avg_infraction_duration_seconds: number;
 }
 
 interface Infraction {
@@ -22,6 +23,7 @@ interface Infraction {
   avg_speed_knots: number;
   speed_limit_knots: number;
   started_at: string;
+  ended_at: string;
 }
 
 const speedThresholds = [0, 13, 14, 15, 16, 20] as const;
@@ -31,6 +33,7 @@ function knotsFromKmh(kmh: number): number {
 }
 
 type SortKey =
+  | "avg_infraction_duration_seconds"
   | "cumulative_excess_knots"
   | "infraction_count"
   | "max_speed_knots"
@@ -51,7 +54,20 @@ function formatDate(iso: string): string {
   });
 }
 
+function formatDuration(seconds: number): string {
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r === 0 ? `${m} min` : `${m} min ${r}s`;
+}
+
 const columns: { key: SortKey; label: string; shortLabel: string }[] = [
+  {
+    key: "avg_infraction_duration_seconds",
+    label: "Duree moy. en exces",
+    shortLabel: "Duree moy.",
+  },
   { key: "cumulative_excess_knots", label: "Total au-dessus de la limite", shortLabel: "Total exces" },
   { key: "infraction_count", label: "Nb. exces", shortLabel: "Nb." },
   { key: "max_speed_knots", label: "Vitesse max", shortLabel: "V. max" },
@@ -128,6 +144,14 @@ function aggregateOffenders(infractions: Infraction[]): Offender[] {
       (sum, i) => sum + (i.avg_speed_knots - i.speed_limit_knots),
       0,
     );
+    const avgDuration =
+      infs.reduce(
+        (sum, i) =>
+          sum +
+          (new Date(i.ended_at).getTime() - new Date(i.started_at).getTime()) /
+            1000,
+        0,
+      ) / infs.length;
     result.push({
       mmsi,
       vessel_name: infs[0].vessel_name,
@@ -136,13 +160,16 @@ function aggregateOffenders(infractions: Infraction[]): Offender[] {
       avg_speed_knots: avgSpeed,
       last_infraction_at: lastAt,
       cumulative_excess_knots: cumulativeExcess,
+      avg_infraction_duration_seconds: avgDuration,
     });
   }
   return result;
 }
 
 export function OffendersTable({ data }: { data: Offender[] }) {
-  const [sortKey, setSortKey] = useState<SortKey>("cumulative_excess_knots");
+  const [sortKey, setSortKey] = useState<SortKey>(
+    "avg_infraction_duration_seconds",
+  );
   const [desc, setDesc] = useState(true);
   const [minSpeedKmh, setMinSpeedKmh] = useState(0);
   const [allInfractions, setAllInfractions] = useState<Infraction[] | null>(null);
@@ -312,6 +339,9 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                     </div>
                   </Link>
                 </td>
+                <td className="py-3 h-10 px-3 text-right font-medium text-speed-danger">
+                  {formatDuration(o.avg_infraction_duration_seconds)}
+                </td>
                 <td className="py-3 h-10 px-3 text-right">
                   <span className="inline-flex items-center rounded-md bg-speed-danger/10 px-2 py-0.5 text-xs font-medium text-speed-danger">
                     +{knotsToKmh(o.cumulative_excess_knots)}
@@ -360,7 +390,7 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                   </p>
                 </div>
                 <span className="inline-flex items-center rounded-md bg-speed-danger/10 px-2 py-0.5 text-xs font-medium text-speed-danger">
-                  +{knotsToKmh(o.cumulative_excess_knots)} km/h cumule
+                  {formatDuration(o.avg_infraction_duration_seconds)} en exces (moy.)
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -371,10 +401,22 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">
-                    Nb. exces
-                  </p>
+                  <p className="text-xs text-muted-foreground">Nb. exces</p>
                   <p>{o.infraction_count}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Total au-dessus de la limite
+                  </p>
+                  <p>+{knotsToKmh(o.cumulative_excess_knots)} km/h cumule</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Vitesse moy. en exces
+                  </p>
+                  <p className="text-speed-warning">
+                    {knotsToKmh(o.avg_speed_knots)} km/h
+                  </p>
                 </div>
               </div>
             </Link>

@@ -24,6 +24,7 @@ interface Offender {
   avg_speed_knots: number;
   last_infraction_at: string;
   cumulative_excess_knots: number;
+  avg_infraction_duration_seconds: number;
 }
 
 interface Infraction {
@@ -127,11 +128,13 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
           aria-labelledby="tab-rois"
         >
           <p className="mb-4 text-xs text-muted-foreground">
-            Classe par le total au-dessus de la limite : pour chaque exces, on
-            prend la vitesse moyenne moins la limite ({SITE.speedLimitKmh}{" "}
-            km/h), et on additionne le tout. Exemple : 93 exces a +2.3 km/h en
-            moyenne = +214 km/h cumules. Plus un bateau depasse souvent et
-            fort, plus il monte.
+            Classe par defaut sur la duree moyenne en exces : pour chaque
+            bateau, on prend la duree de chacun de ses exces (debut &rarr;
+            retour sous la limite) et on en fait la moyenne. Plus un bateau
+            soutient sa vitesse au-dessus de {SITE.speedLimitKmh} km/h
+            longtemps a chaque fois, plus il monte. Les autres colonnes
+            (nombre d&apos;exces, vitesse max, total cumule, etc.) restent
+            triables.
           </p>
           <OffendersTable data={offenders} />
         </section>

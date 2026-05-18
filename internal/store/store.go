@@ -56,13 +56,14 @@ type Infraction struct {
 }
 
 type Offender struct {
-	MMSI              int       `json:"mmsi"`
-	VesselName        string    `json:"vessel_name"`
-	InfractionCount   int       `json:"infraction_count"`
-	MaxSpeedKnots     float64   `json:"max_speed_knots"`
-	AvgSpeedKnots     float64   `json:"avg_speed_knots"`
-	LastInfractionAt  time.Time `json:"last_infraction_at"`
-	CumulativeExcess  float64   `json:"cumulative_excess_knots"`
+	MMSI                       int       `json:"mmsi"`
+	VesselName                 string    `json:"vessel_name"`
+	InfractionCount            int       `json:"infraction_count"`
+	MaxSpeedKnots              float64   `json:"max_speed_knots"`
+	AvgSpeedKnots              float64   `json:"avg_speed_knots"`
+	LastInfractionAt           time.Time `json:"last_infraction_at"`
+	CumulativeExcess           float64   `json:"cumulative_excess_knots"`
+	AvgInfractionDurationSecs  float64   `json:"avg_infraction_duration_seconds"`
 }
 
 type Stats struct {
@@ -154,12 +155,13 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		       COUNT(*) as infraction_count,
 		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
 		       MAX(i.ended_at) as last_infraction,
-		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess
+		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess,
+		       AVG(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as avg_duration_seconds
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
 		WHERE `+sustainedFilter+`
 		GROUP BY i.mmsi, v.name
-		ORDER BY cumulative_excess DESC, max_speed DESC
+		ORDER BY avg_duration_seconds DESC, cumulative_excess DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -171,7 +173,8 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 	for rows.Next() {
 		var o Offender
 		if err := rows.Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
-			&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess); err != nil {
+			&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
+			&o.AvgInfractionDurationSecs); err != nil {
 			return nil, err
 		}
 		offenders = append(offenders, o)
@@ -187,13 +190,15 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		       COUNT(*) as infraction_count,
 		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
 		       MAX(i.ended_at) as last_infraction,
-		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess
+		       SUM(i.avg_speed_knots - i.speed_limit_knots) as cumulative_excess,
+		       AVG(EXTRACT(EPOCH FROM (i.ended_at - i.started_at))) as avg_duration_seconds
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
 		WHERE i.mmsi = $1 AND `+sustainedFilter+`
 		GROUP BY i.mmsi, v.name
 	`, mmsi).Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
-		&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess)
+		&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
+		&o.AvgInfractionDurationSecs)
 	if err == sql.ErrNoRows {
 		return nil, nil, nil
 	}
