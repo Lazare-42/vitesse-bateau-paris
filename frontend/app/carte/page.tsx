@@ -81,12 +81,12 @@ export default async function CartePage({
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="text-lg font-semibold mb-4">Carte des exces</h1>
+      <h1 className="text-lg font-semibold mb-4">Carte des excès</h1>
       <MethodologyNote />
       <Suspense
         fallback={
           <div className="flex h-[50vh] sm:h-[70vh] items-center justify-center rounded-lg border text-sm text-muted-foreground">
-            Chargement...
+            Chargement…
           </div>
         }
       >

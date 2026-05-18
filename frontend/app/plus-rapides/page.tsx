@@ -29,7 +29,7 @@ export default async function PlusRapidesPage() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Classement de tous les bateaux par leur vitesse maximale jamais
-          enregistree sur la {SITE.river} a {SITE.city}.
+          enregistrée sur la {SITE.river} à {SITE.city}.
         </p>
       </div>
 

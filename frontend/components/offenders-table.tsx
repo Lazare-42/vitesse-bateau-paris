@@ -89,29 +89,29 @@ function formatPercent(ratio: number): string {
 const columns: { key: SortKey; label: string; shortLabel: string }[] = [
   {
     key: "excess_time_ratio",
-    label: "% du temps en exces",
-    shortLabel: "% exces",
+    label: "% du temps en excès",
+    shortLabel: "% excès",
   },
   {
     key: "total_excess_seconds",
-    label: "Temps total en exces",
+    label: "Temps total en excès",
     shortLabel: "Total temps",
   },
   {
     key: "avg_infraction_duration_seconds",
-    label: "Duree moy. en exces",
-    shortLabel: "Duree moy.",
+    label: "Durée moy. en excès",
+    shortLabel: "Durée moy.",
   },
-  { key: "infraction_count", label: "Nb. exces", shortLabel: "Nb." },
+  { key: "infraction_count", label: "Nb. excès", shortLabel: "Nb." },
   { key: "max_speed_knots", label: "Vitesse max", shortLabel: "V. max" },
   {
     key: "avg_speed_knots",
-    label: "Vitesse moy. en exces",
+    label: "Vitesse moy. en excès",
     shortLabel: "V. moy.",
   },
   {
     key: "last_infraction_at",
-    label: "Dernier exces",
+    label: "Dernier excès",
     shortLabel: "Dernier",
   },
 ];
@@ -281,7 +281,7 @@ export function OffendersTable({ data }: { data: Offender[] }) {
   if (data.length === 0) {
     return (
       <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
-        Aucun exces enregistre pour le moment.
+        Aucun excès enregistré pour le moment.
       </div>
     );
   }
@@ -311,7 +311,7 @@ export function OffendersTable({ data }: { data: Offender[] }) {
         )}
         {loading && (
           <span className="text-xs text-muted-foreground ml-1 animate-pulse">
-            Chargement...
+            Chargement…
           </span>
         )}
       </div>
@@ -325,6 +325,7 @@ export function OffendersTable({ data }: { data: Offender[] }) {
             setDesc(true);
           }}
           className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground w-full"
+          aria-label="Trier par"
         >
           {columns.map((c) => (
             <option key={c.key} value={c.key}>
@@ -438,13 +439,13 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                   </p>
                 </div>
                 <span className="inline-flex items-center rounded-md bg-speed-danger/10 px-2 py-0.5 text-xs font-medium text-speed-danger">
-                  {formatPercent(o.excess_time_ratio)} du temps en exces
+                  {formatPercent(o.excess_time_ratio)} du temps en excès
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground">
-                    Temps total en exces
+                    Temps total en excès
                   </p>
                   <p className="font-medium text-speed-danger">
                     {formatLongDuration(o.total_excess_seconds)}
@@ -452,7 +453,7 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">
-                    Duree moy. en exces
+                    Durée moy. en excès
                   </p>
                   <p className="text-speed-warning">
                     {formatDuration(o.avg_infraction_duration_seconds)}
@@ -465,14 +466,14 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Nb. exces</p>
+                  <p className="text-xs text-muted-foreground">Nb. excès</p>
                   <p>{o.infraction_count}</p>
                 </div>
               </div>
             </Link>
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">
-                Dernier exces : {formatDate(o.last_infraction_at)}
+                Dernier excès : {formatDate(o.last_infraction_at)}
               </p>
               <CarteLink href={`/carte?bateau=${o.mmsi}`} />
             </div>

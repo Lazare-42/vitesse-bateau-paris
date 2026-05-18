@@ -13,7 +13,7 @@ type TabId = "records" | "rois" | "recents";
 const TABS: { id: TabId; label: string }[] = [
   { id: "rois", label: `Rois ${SITE.riverWithArticle}` },
   { id: "records", label: "Records de vitesse" },
-  { id: "recents", label: "Exces recents" },
+  { id: "recents", label: "Excès récents" },
 ];
 
 interface Offender {
@@ -109,7 +109,7 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
         >
           <div className="mb-3 flex items-baseline justify-between gap-4">
             <p className="text-xs text-muted-foreground">
-              Top 50 par vitesse maximale jamais atteinte (sur exces soutenus
+              Top 50 par vitesse maximale jamais atteinte (sur excès soutenus
               au moins 30 secondes).
             </p>
             <Link
@@ -130,12 +130,12 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
           aria-labelledby="tab-rois"
         >
           <p className="mb-4 text-xs text-muted-foreground">
-            Classe par defaut sur le pourcentage de temps en exces :
-            (duree totale en exces) divisee par (temps total passe dans la
-            zone). Plus un bateau roule au-dessus de {SITE.speedLimitKmh}{" "}
+            Classé par défaut sur le pourcentage de temps en excès :
+            (durée totale en excès) divisée par (temps total passé dans la
+            zone). Plus un bateau navigue au-dessus de {SITE.speedLimitKmh}{" "}
             km/h pendant qu&apos;il est suivi en AIS, plus il monte. Les
-            autres colonnes (duree moyenne par exces, total cumule, nombre
-            d&apos;exces, vitesse max, etc.) restent triables.
+            autres colonnes (durée moyenne par excès, total cumulé, nombre
+            d&apos;excès, vitesse max, etc.) restent triables.
           </p>
           <OffendersTable data={offenders} />
         </section>
@@ -148,11 +148,11 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
           aria-labelledby="tab-recents"
         >
           <p className="mb-4 text-xs text-muted-foreground">
-            Un exces de vitesse est un segment continu ou un bateau depasse la
+            Un excès de vitesse est un segment continu où un bateau dépasse la
             limite de {SITE.speedLimitKmh} km/h. Il commence au premier ping
-            en exces et se termine quand la vitesse repasse sous la limite. La
-            vitesse max, la vitesse moyenne, la duree et le trajet (point de
-            depart &rarr; point d&apos;arrivee) sont enregistres.
+            en excès et se termine quand la vitesse repasse sous la limite. La
+            vitesse max, la vitesse moyenne, la durée et le trajet (point de
+            départ &rarr; point d&apos;arrivée) sont enregistrés.
           </p>
           <ViolationsTable data={infractions} offenders={offenders} />
         </section>
@@ -164,7 +164,7 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
 export function HomeTabs(props: HomeTabsProps) {
   return (
     <Suspense
-      fallback={<div className="text-sm text-muted-foreground">Chargement...</div>}
+      fallback={<div className="text-sm text-muted-foreground">Chargement…</div>}
     >
       <HomeTabsInner {...props} />
     </Suspense>

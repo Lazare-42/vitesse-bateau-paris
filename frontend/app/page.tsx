@@ -69,8 +69,8 @@ export default async function Home() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">{SITE.name}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Suivi en temps reel des exces de vitesse sur la {SITE.river} &mdash;
-          limite : {SPEED_LIMIT_KNOTS.toFixed(1)} noeuds (~{SITE.speedLimitKmh}{" "}
+          Suivi en temps réel des excès de vitesse sur la {SITE.river} &mdash;
+          limite : {SPEED_LIMIT_KNOTS.toFixed(1)} nœuds (~{SITE.speedLimitKmh}{" "}
           km/h)
         </p>
       </div>

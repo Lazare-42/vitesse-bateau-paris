@@ -2,13 +2,21 @@ import type { Metadata } from "next";
 import { SITE } from "@/site.config";
 
 export const metadata: Metadata = {
-  title: `A propos - ${SITE.name}`,
+  title: `À propos — ${SITE.name}`,
+  description: `Méthodologie de ${SITE.name} : comment les excès de vitesse sont détectés à partir des données AIS publiques, et quels bateaux sont inclus.`,
+  alternates: { canonical: "/a-propos" },
+  openGraph: {
+    title: `À propos — ${SITE.name}`,
+    description: `Méthodologie : détection des excès de vitesse des bateaux sur la ${SITE.river} à partir des données AIS publiques.`,
+    url: "/a-propos",
+    type: "article",
+  },
 };
 
 export default function AProposPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="text-2xl font-bold tracking-tight">Comment ca marche</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Comment ça marche</h1>
 
       <div className="mt-6 space-y-6 text-sm leading-relaxed text-muted-foreground">
         <section>
@@ -16,33 +24,33 @@ export default function AProposPage() {
             La limite de vitesse
           </h2>
           <p>
-            La vitesse maximale autorisee sur la Seine a Paris est de{" "}
+            La vitesse maximale autorisée sur la Seine à Paris est de{" "}
             <strong className="text-foreground">
-              12 km/h (6.5 noeuds)
+              12 km/h (6,5 nœuds)
             </strong>{" "}
             dans les zones de navigation les plus centrales. Cette limite est
-            fixee par l&apos;
+            fixée par l&apos;
             <a
               href="https://www.legifrance.gouv.fr/loda/id/JORFTEXT000000363059/"
               target="_blank"
               rel="noopener noreferrer"
               className="underline hover:text-foreground transition-colors"
             >
-              Arrete du 22 novembre 1993 fixant le reglement particulier de
-              police de la navigation sur le reseau fluvial de la ville de Paris
+              Arrêté du 22 novembre 1993 fixant le règlement particulier de
+              police de la navigation sur le réseau fluvial de la ville de Paris
             </a>{" "}
-            (article 12 : vitesse limitee a 12 km/h dans la traversee de Paris){" "}
-            et vise a proteger les berges, les ouvrages d&apos;art et les autres
+            (article 12 : vitesse limitée à 12 km/h dans la traversée de Paris){" "}
+            et vise à protéger les berges, les ouvrages d&apos;art et les autres
             usagers de la voie d&apos;eau.
           </p>
         </section>
 
         <section>
           <h2 className="mb-2 text-base font-semibold text-foreground">
-            Les donnees AIS
+            Les données AIS
           </h2>
           <p>
-            Chaque bateau de commerce et de transport de passagers est equipe
+            Chaque bateau de commerce et de transport de passagers est équipé
             d&apos;un transpondeur{" "}
             <a
               href="https://fr.wikipedia.org/wiki/Syst%C3%A8me_d%27identification_automatique"
@@ -52,13 +60,13 @@ export default function AProposPage() {
             >
               AIS (Automatic Identification System)
             </a>
-            . Ce transpondeur emet en continu la position, la vitesse (SOG
+            . Ce transpondeur émet en continu la position, la vitesse (SOG
             &mdash; Speed Over Ground), le cap et l&apos;identifiant unique du
-            bateau (MMSI). Les signaux sont recus par des stations terrestres et
-            des satellites, puis redistribues en temps reel.
+            bateau (MMSI). Les signaux sont reçus par des stations terrestres et
+            des satellites, puis redistribués en temps réel.
           </p>
           <p className="mt-2">
-            Nous recevons ces donnees via le flux WebSocket gratuit de{" "}
+            Nous recevons ces données via le flux WebSocket gratuit de{" "}
             <a
               href="https://aisstream.io"
               target="_blank"
@@ -67,9 +75,9 @@ export default function AProposPage() {
             >
               aisstream.io
             </a>
-            , filtre sur une zone englobant la Seine a Paris (de Issy-les-Moulineaux
-            a la Villette environ). Les noms des bateaux sont enrichis via la base
-            de donnees{" "}
+            , filtré sur une zone englobant la Seine à Paris (de Issy-les-Moulineaux
+            à la Villette environ). Les noms des bateaux sont enrichis via la base
+            de données{" "}
             <a
               href="https://www.itu.int/mmsapp/shipstation/list"
               target="_blank"
@@ -78,7 +86,7 @@ export default function AProposPage() {
             >
               ITU MARS
             </a>{" "}
-            de l&apos;Union Internationale des Telecommunications.
+            de l&apos;Union Internationale des Télécommunications.
           </p>
         </section>
 
@@ -88,80 +96,80 @@ export default function AProposPage() {
           </h2>
           <p>
             <strong className="text-foreground">Tous les bateaux qui
-            emettent en AIS dans la zone.</strong> Aucun filtrage par type
-            n&apos;est applique : bateaux de commerce et peniches de fret,
-            bateaux a passagers (bateaux-mouches, vedettes touristiques),
+            émettent en AIS dans la zone.</strong> Aucun filtrage par type
+            n&apos;est appliqué : bateaux de commerce et péniches de fret,
+            bateaux à passagers (bateaux-mouches, vedettes touristiques),
             vedettes de service (douanes, police fluviale, pompiers, VNF),
-            plaisanciers, peniches-logements en deplacement. Le site se
-            contente d&apos;agreger ce que les transpondeurs emettent. Si un
-            bateau apparait souvent en tete du classement, c&apos;est qu&apos;il
-            depasse souvent la limite &mdash; pas parce qu&apos;il aurait ete
-            cible.
+            plaisanciers, péniches-logements en déplacement. Le site se
+            contente d&apos;agréger ce que les transpondeurs émettent. Si un
+            bateau apparaît souvent en tête du classement, c&apos;est qu&apos;il
+            dépasse souvent la limite &mdash; pas parce qu&apos;il aurait été
+            ciblé.
           </p>
           <p className="mt-2">
-            Quelques nuances de couverture, par construction du systeme AIS :
+            Quelques nuances de couverture, par construction du système AIS :
           </p>
           <ul className="mt-2 list-disc pl-5 space-y-1">
             <li>
-              Les tres petites embarcations (avirons, kayaks, paddle, petits
+              Les très petites embarcations (avirons, kayaks, paddle, petits
               hors-bord de loisir) n&apos;ont pas de transpondeur et ne sont
               donc pas visibles.
             </li>
             <li>
-              Un bateau qui eteint son AIS disparait du suivi. C&apos;est
+              Un bateau qui éteint son AIS disparaît du suivi. C&apos;est
               normalement interdit en navigation commerciale.
             </li>
             <li>
-              Les exces tres brefs (moins de 30 secondes) sont ignores pour
-              ecarter les sauts de signal GPS sous les ponts &mdash; les
-              vitesses extremes ponctuelles ne sont donc pas comptees.
+              Les excès très brefs (moins de 30 secondes) sont ignorés pour
+              écarter les sauts de signal GPS sous les ponts &mdash; les
+              vitesses extrêmes ponctuelles ne sont donc pas comptées.
             </li>
           </ul>
           <p className="mt-2">
-            Le site n&apos;a pas vocation a designer une categorie d&apos;usagers
-            plutot qu&apos;une autre. Il publie des statistiques brutes sur la
-            base d&apos;une regle unique : 12 km/h pour tout le monde.
+            Le site n&apos;a pas vocation à désigner une catégorie d&apos;usagers
+            plutôt qu&apos;une autre. Il publie des statistiques brutes sur la
+            base d&apos;une règle unique : 12 km/h pour tout le monde.
           </p>
         </section>
 
         <section>
           <h2 className="mb-2 text-base font-semibold text-foreground">
-            Definition d&apos;un exces de vitesse
+            Définition d&apos;un excès de vitesse
           </h2>
           <p>
-            Un exces de vitesse est un{" "}
+            Un excès de vitesse est un{" "}
             <strong className="text-foreground">
-              segment continu de depassement de la limite
+              segment continu de dépassement de la limite
             </strong>
-            . Il est defini comme suit :
+            . Il est défini comme suit :
           </p>
           <ul className="mt-2 list-disc pl-5 space-y-1">
             <li>
-              <strong className="text-foreground">Debut :</strong> premier ping
-              AIS ou la vitesse du bateau depasse 6.5 noeuds.
+              <strong className="text-foreground">Début :</strong> premier ping
+              AIS où la vitesse du bateau dépasse 6,5 nœuds.
             </li>
             <li>
               <strong className="text-foreground">Fin :</strong> le bateau
               envoie un ping en dessous de la limite, ou aucun ping n&apos;est
-              recu pendant 2 minutes (le bateau a quitte la zone).
+              reçu pendant 2 minutes (le bateau a quitté la zone).
             </li>
             <li>
               On enregistre la{" "}
               <strong className="text-foreground">vitesse maximale</strong>, la{" "}
               <strong className="text-foreground">vitesse moyenne</strong>, la{" "}
-              <strong className="text-foreground">duree</strong>, le{" "}
+              <strong className="text-foreground">durée</strong>, le{" "}
               <strong className="text-foreground">nombre de pings</strong> et le{" "}
               <strong className="text-foreground">
-                trajet (point de depart et d&apos;arrivee)
+                trajet (point de départ et d&apos;arrivée)
               </strong>
               .
             </li>
           </ul>
           <p className="mt-2">
-            Ce n&apos;est pas un exces au sens legal &mdash; seuls les
-            services de la navigation fluviale (VNF) sont habilites a
-            verbaliser. Il s&apos;agit d&apos;un constat factuel base sur les
-            donnees AIS publiques.
+            Ce n&apos;est pas un excès au sens légal &mdash; seuls les
+            services de la navigation fluviale (VNF) sont habilités à
+            verbaliser. Il s&apos;agit d&apos;un constat factuel basé sur les
+            données AIS publiques.
           </p>
         </section>
 
@@ -171,19 +179,19 @@ export default function AProposPage() {
           </h2>
           <ul className="list-disc pl-5 space-y-1">
             <li>
-              <strong className="text-foreground">Backend :</strong> Go, connecte
-              en WebSocket au flux AIS. Stocke les positions et exces dans
+              <strong className="text-foreground">Backend :</strong> Go, connecté
+              en WebSocket au flux AIS. Stocke les positions et excès dans
               PostgreSQL.
             </li>
             <li>
               <strong className="text-foreground">Frontend :</strong> Next.js,
-              rendu cote serveur, rafraichi toutes les 30 secondes.
+              rendu côté serveur, rafraîchi toutes les 30 secondes.
             </li>
             <li>
-              <strong className="text-foreground">Donnees :</strong> les
-              positions normales sont echantillonnees a 1 par bateau par 5
-              minutes pour limiter le stockage. Les positions en exces de vitesse
-              sont stockees a pleine resolution (chaque ping).
+              <strong className="text-foreground">Données :</strong> les
+              positions normales sont échantillonnées à 1 par bateau par 5
+              minutes pour limiter le stockage. Les positions en excès de vitesse
+              sont stockées à pleine résolution (chaque ping).
             </li>
           </ul>
         </section>

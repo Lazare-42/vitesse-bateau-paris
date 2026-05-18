@@ -21,7 +21,7 @@ export function Stats({ data }: { data: StatsData }) {
       value: data.total_vessels_tracked.toLocaleString("fr-FR"),
     },
     {
-      label: "Exces",
+      label: "Excès",
       value: data.total_infractions.toLocaleString("fr-FR"),
     },
     {
@@ -29,16 +29,16 @@ export function Stats({ data }: { data: StatsData }) {
       value: data.unique_offenders.toLocaleString("fr-FR"),
     },
     {
-      label: "Exces par jour",
+      label: "Excès par jour",
       value: data.avg_infractions_per_day.toLocaleString("fr-FR", {
         maximumFractionDigits: 1,
       }),
-      sub: "moyenne depuis le debut",
+      sub: "moyenne depuis le début",
     },
     {
-      label: "Vitesse moy. en exces",
+      label: "Vitesse moy. en excès",
       value: `${knotsToKmh(data.avg_infraction_speed_knots)} km/h`,
-      sub: `${data.avg_infraction_speed_knots.toFixed(1)} noeuds`,
+      sub: `${data.avg_infraction_speed_knots.toFixed(1)} nœuds`,
     },
   ];
 

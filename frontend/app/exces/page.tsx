@@ -41,7 +41,7 @@ export default async function InfractionsPage() {
       <MethodologyNote />
       <Suspense
         fallback={
-          <div className="text-sm text-muted-foreground">Chargement...</div>
+          <div className="text-sm text-muted-foreground">Chargement…</div>
         }
       >
         <InfractionsBrowser infractions={infractions} offenders={offenders} />

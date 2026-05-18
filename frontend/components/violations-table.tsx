@@ -73,7 +73,7 @@ type SortKey = "date" | "speed" | "excess";
 const sortColumns: { key: SortKey; label: string; shortLabel: string }[] = [
   { key: "date", label: "Date", shortLabel: "Date" },
   { key: "speed", label: "Vitesse max", shortLabel: "V. max" },
-  { key: "excess", label: "Exces", shortLabel: "Exces" },
+  { key: "excess", label: "Excès", shortLabel: "Excès" },
 ];
 
 function SortIcon({ active, desc }: { active: boolean; desc: boolean }) {
@@ -208,7 +208,7 @@ export function ViolationsTable({
   if (data.length === 0) {
     return (
       <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
-        Aucun exces enregistre pour le moment.
+        Aucun excès enregistré pour le moment.
       </div>
     );
   }
@@ -248,7 +248,7 @@ export function ViolationsTable({
 
       {/* Date range filter */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">Periode :</span>
+        <span className="text-sm text-muted-foreground">Période :</span>
         {dateChips.map((c) => (
           <button
             key={c.hours}
@@ -265,7 +265,7 @@ export function ViolationsTable({
         ))}
         {loading && (
           <span className="text-xs text-muted-foreground ml-1 animate-pulse">
-            Chargement...
+            Chargement…
           </span>
         )}
       </div>
@@ -287,7 +287,7 @@ export function ViolationsTable({
           </button>
         ))}
         <span className="text-xs text-muted-foreground ml-1">
-          {filtered.length} exces
+          {filtered.length} excès
         </span>
       </div>
 
@@ -300,6 +300,7 @@ export function ViolationsTable({
             setSortDesc(true);
           }}
           className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground w-full"
+          aria-label="Trier par"
         >
           {sortColumns.map((c) => (
             <option key={c.key} value={c.key}>

@@ -9,16 +9,7 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { SITE, SPEED_LIMIT_KNOTS, BASE_PATH } from "@/site.config";
-
-interface LivePosition {
-  mmsi: number;
-  vessel_name: string;
-  latitude: number;
-  longitude: number;
-  speed_knots: number;
-  course: number;
-  received_at: string;
-}
+import { CruisingList, type LivePosition } from "./cruising-list";
 
 function knotsToKmh(n: number): string {
   return (n * 1.852).toFixed(1);
@@ -57,11 +48,13 @@ const BUCKET_STYLE: Record<
 };
 
 type ConnectionState = "connecting" | "open" | "polling" | "error";
+type MobileView = "map" | "list";
 
 export function LiveMap() {
   const [positions, setPositions] = useState<Map<number, LivePosition>>(
     () => new Map(),
   );
+  const [mobileView, setMobileView] = useState<MobileView>("map");
   const [conn, setConn] = useState<ConnectionState>("connecting");
   const [lastUpdate, setLastUpdate] = useState(0);
   // Re-render every 1 s so the "il y a Xs" age string ticks smoothly and
@@ -239,10 +232,10 @@ export function LiveMap() {
         </span>
       );
     if (conn === "polling")
-      return <span className="text-amber-500">connexion temps reel perdue (polling)</span>;
+      return <span className="text-amber-500">connexion temps réel perdue (polling)</span>;
     if (conn === "error")
       return <span className="text-speed-danger">erreur de connexion</span>;
-    return "connexion...";
+    return "connexion…";
   })();
 
   return (
@@ -256,7 +249,7 @@ export function LiveMap() {
           {lastUpdate > 0 && (
             <>
               {" "}
-              &middot; derniere donnee{" "}
+              &middot; dernière donnée{" "}
               <span suppressHydrationWarning>{ageStr}</span>
             </>
           )}
@@ -266,7 +259,7 @@ export function LiveMap() {
             className="inline-block h-3 w-3 rounded-full"
             style={{ background: BUCKET_STYLE.speeding.fill }}
           />
-          en exces ({counts.speeding})
+          en excès ({counts.speeding})
         </span>
         <span className="inline-flex items-center gap-1">
           <span
@@ -291,61 +284,99 @@ export function LiveMap() {
         </span>
       </div>
 
-      <div className="rounded-lg overflow-hidden border">
-        <MapContainer
-          center={SITE.mapCenter}
-          zoom={SITE.mapZoom}
-          className="h-[50vh] sm:h-[70vh] w-full"
-          attributionControl={false}
+      {/* Mobile toggle Carte / Liste — hidden on lg+ where both show side-by-side */}
+      <div
+        role="tablist"
+        aria-label="Vue mobile"
+        className="lg:hidden mb-3 inline-flex rounded-md border p-0.5"
+      >
+        {(["map", "list"] as MobileView[]).map((v) => {
+          const active = mobileView === v;
+          return (
+            <button
+              key={v}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setMobileView(v)}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                active
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {v === "map" ? "Carte" : "Liste"}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div
+          className={`lg:col-span-2 ${mobileView !== "map" ? "hidden lg:block" : ""}`}
         >
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-          {Array.from(positions.values()).map((p) => {
-            const b = bucketize(p);
-            const style = BUCKET_STYLE[b];
-            return (
-              <CircleMarker
-                key={p.mmsi}
-                center={[p.latitude, p.longitude]}
-                radius={style.radius}
-                pathOptions={{
-                  color: style.color,
-                  fillColor: style.fill,
-                  fillOpacity: 0.8,
-                  weight: style.weight,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <p className="font-semibold">
-                      {p.vessel_name || "Inconnu"}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">
-                      MMSI {p.mmsi}
-                    </p>
-                    <p className="mt-1">
-                      <span
-                        className={
-                          p.speed_knots > SPEED_LIMIT_KNOTS
-                            ? "font-medium text-speed-danger"
-                            : "font-medium"
-                        }
-                      >
-                        {knotsToKmh(p.speed_knots)} km/h
-                      </span>{" "}
-                      <span className="text-muted-foreground text-xs">
-                        ({p.speed_knots.toFixed(1)} noeuds)
-                      </span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Cap {Math.round(p.course)}° &middot;{" "}
-                      {formatAge(p.received_at)}
-                    </p>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            );
-          })}
-        </MapContainer>
+          <div className="rounded-lg overflow-hidden border">
+            <MapContainer
+              center={SITE.mapCenter}
+              zoom={SITE.mapZoom}
+              className="h-[50vh] sm:h-[70vh] w-full"
+              attributionControl={false}
+            >
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+              {Array.from(positions.values()).map((p) => {
+                const b = bucketize(p);
+                const style = BUCKET_STYLE[b];
+                return (
+                  <CircleMarker
+                    key={p.mmsi}
+                    center={[p.latitude, p.longitude]}
+                    radius={style.radius}
+                    pathOptions={{
+                      color: style.color,
+                      fillColor: style.fill,
+                      fillOpacity: 0.8,
+                      weight: style.weight,
+                    }}
+                  >
+                    <Popup>
+                      <div className="text-sm">
+                        <p className="font-semibold">
+                          {p.vessel_name || "Inconnu"}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          MMSI {p.mmsi}
+                        </p>
+                        <p className="mt-1">
+                          <span
+                            className={
+                              p.speed_knots > SPEED_LIMIT_KNOTS
+                                ? "font-medium text-speed-danger"
+                                : "font-medium"
+                            }
+                          >
+                            {knotsToKmh(p.speed_knots)} km/h
+                          </span>{" "}
+                          <span className="text-muted-foreground text-xs">
+                            ({p.speed_knots.toFixed(1)} nœuds)
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Cap {Math.round(p.course)}° &middot;{" "}
+                          {formatAge(p.received_at)}
+                        </p>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                );
+              })}
+            </MapContainer>
+          </div>
+        </div>
+
+        <div
+          className={`lg:col-span-1 ${mobileView !== "list" ? "hidden lg:block" : ""}`}
+        >
+          <CruisingList positions={positions} />
+        </div>
       </div>
     </div>
   );
