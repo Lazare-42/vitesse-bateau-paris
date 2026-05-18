@@ -56,45 +56,10 @@ export const SITE = {
   // Zoom initial de la carte.
   mapZoom: Number(process.env.NEXT_PUBLIC_MAP_ZOOM) || 12,
 
-  // Sous-zones cliquables sur la carte. Tableau vide = pas de filtre par zone.
-  // Surcharger via NEXT_PUBLIC_MAP_ZONES (JSON sérialisé).
-  zones: parseZones(process.env.NEXT_PUBLIC_MAP_ZONES, [
-    {
-      name: "Boulogne",
-      bounds: [
-        [48.8385, 2.2565],
-        [48.8585, 2.2875],
-      ],
-    },
-    {
-      name: "Trocadero",
-      bounds: [
-        [48.855, 2.2875],
-        [48.867, 2.3035],
-      ],
-    },
-    {
-      name: "Centre",
-      bounds: [
-        [48.854, 2.3035],
-        [48.865, 2.347],
-      ],
-    },
-    {
-      name: "Bastille",
-      bounds: [
-        [48.846, 2.347],
-        [48.858, 2.369],
-      ],
-    },
-    {
-      name: "Bercy",
-      bounds: [
-        [48.832, 2.369],
-        [48.848, 2.3965],
-      ],
-    },
-  ]),
+  // Sous-zones cliquables sur la carte. Vide par défaut (pas de filtre par
+  // zone). Chaque déploiement fournit les siennes via NEXT_PUBLIC_MAP_ZONES
+  // (JSON sérialisé) dans son .env.local.
+  zones: parseZones(process.env.NEXT_PUBLIC_MAP_ZONES, []),
 } as const;
 
 export const SPEED_LIMIT_KNOTS = SITE.speedLimitKmh / 1.852;
