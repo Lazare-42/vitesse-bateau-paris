@@ -64,11 +64,11 @@ export function LiveMap() {
   );
   const [conn, setConn] = useState<ConnectionState>("connecting");
   const [lastUpdate, setLastUpdate] = useState(0);
-  // Re-render every 30 s so the "stale" colouring and the "il y a Xs" age
-  // strings refresh even when no message arrives.
-  const [tick, setTick] = useState(0);
+  // Re-render every 1 s so the "il y a Xs" age string ticks smoothly and
+  // the "stale" colouring transitions without waiting for a WS push.
+  const [, setTick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    const id = setInterval(() => setTick((t) => t + 1), 1_000);
     return () => clearInterval(id);
   }, []);
 
@@ -202,19 +202,41 @@ export function LiveMap() {
     const c = { speeding: 0, warning: 0, ok: 0, stale: 0, total: positions.size };
     for (const p of positions.values()) c[bucketize(p)]++;
     return c;
-    // tick is read to force recomputation as time advances
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positions, tick]);
+  }, [positions]);
+
+  const ageStr = (() => {
+    if (lastUpdate === 0) return "";
+    const s = Math.floor((Date.now() - lastUpdate) / 1000);
+    if (s < 2) return "a l'instant";
+    if (s < 60) return `il y a ${s}s`;
+    const m = Math.floor(s / 60);
+    return `il y a ${m} min`;
+  })();
+
+  const liveIndicator = (
+    // Concentric circles: a static dot under, and a re-mounting halo on
+    // top that runs the ping animation once per new WS message. The key
+    // is lastUpdate so React tears down and recreates the halo whenever
+    // a fresh position arrives.
+    <span className="relative inline-flex h-2.5 w-2.5">
+      <span
+        key={lastUpdate}
+        className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+        style={{
+          animation: "vitesse-ping 600ms cubic-bezier(0, 0, 0.2, 1) 1",
+        }}
+      />
+      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+    </span>
+  );
 
   const statusLine = (() => {
     if (conn === "open")
       return (
-        <>
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            en direct
-          </span>
-        </>
+        <span className="inline-flex items-center gap-2">
+          {liveIndicator}
+          en direct
+        </span>
       );
     if (conn === "polling")
       return <span className="text-amber-500">connexion temps reel perdue (polling)</span>;
@@ -234,10 +256,8 @@ export function LiveMap() {
           {lastUpdate > 0 && (
             <>
               {" "}
-              &middot;{" "}
-              <span suppressHydrationWarning>
-                maj {new Date(lastUpdate).toLocaleTimeString("fr-FR")}
-              </span>
+              &middot; derniere donnee{" "}
+              <span suppressHydrationWarning>{ageStr}</span>
             </>
           )}
         </span>

@@ -85,3 +85,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Single-shot "ping" pulse used to flash the live-WS indicator on every
+   incoming position. Defined here because Tailwind v4 only injects the
+   `ping` keyframe when the animate-ping utility is referenced, and we
+   want to drive it via the `animation` shorthand instead. */
+@keyframes vitesse-ping {
+  0% { transform: scale(1); opacity: 0.75; }
+  100% { transform: scale(2); opacity: 0; }
+}
