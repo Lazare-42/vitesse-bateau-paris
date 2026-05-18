@@ -1,8 +1,22 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { InfractionsMapWrapper } from "@/components/infractions-map-wrapper";
 import { MethodologyNote } from "@/components/methodology-note";
+import { SITE } from "@/site.config";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: `Carte des excès de vitesse sur la ${SITE.river}`,
+  description: `Visualisation cartographique des excès de vitesse des bateaux sur la ${SITE.river} à ${SITE.city}. Cliquez sur un segment pour voir le détail de l'excès.`,
+  alternates: { canonical: "/carte" },
+  openGraph: {
+    title: `Carte des excès — ${SITE.name}`,
+    description: `Visualisation cartographique des excès de vitesse des bateaux sur la ${SITE.river} à ${SITE.city}.`,
+    url: "/carte",
+    type: "website",
+  },
+};
 
 const API_URL = process.env.API_URL || "http://localhost:8092";
 
@@ -81,7 +95,9 @@ export default async function CartePage({
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="text-lg font-semibold mb-4">Carte des excès</h1>
+      <h1 className="mb-4 text-2xl font-bold tracking-tight">
+        Carte des excès de vitesse sur la {SITE.river}
+      </h1>
       <MethodologyNote />
       <Suspense
         fallback={

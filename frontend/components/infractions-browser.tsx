@@ -72,7 +72,7 @@ type SortKey = "date" | "speed" | "excess";
 const sortColumns: { key: SortKey; label: string; shortLabel: string }[] = [
   { key: "date", label: "Date", shortLabel: "Date" },
   { key: "speed", label: "Vitesse max", shortLabel: "V. max" },
-  { key: "excess", label: "Exces", shortLabel: "Exces" },
+  { key: "excess", label: "Excès", shortLabel: "Excès" },
 ];
 
 const speedThresholds = [0, 13, 14, 15, 16, 20] as const;
@@ -198,11 +198,9 @@ export function InfractionsBrowser({
                 Voir tout
               </button>
             </div>
-          ) : (
-            <h2 className="text-lg font-semibold">Tous les exces</h2>
-          )}
+          ) : null}
           <p className="text-sm text-muted-foreground">
-            {filtered.length} exces
+            {filtered.length} excès
           </p>
         </div>
 
@@ -210,6 +208,7 @@ export function InfractionsBrowser({
           value={selectedMmsi || ""}
           onChange={(e) => setFilter(e.target.value)}
           className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:w-64"
+          aria-label="Filtrer par bateau"
         >
           <option value="">Tous les bateaux</option>
           {offenders.map((o) => (
@@ -237,13 +236,13 @@ export function InfractionsBrowser({
           </button>
         ))}
         <span className="text-xs text-muted-foreground ml-1">
-          {filtered.length} exces
+          {filtered.length} excès
         </span>
       </div>
 
       {filtered.length === 0 ? (
         <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
-          Aucun exces enregistre pour le moment.
+          Aucun excès enregistré pour le moment.
         </div>
       ) : (
         <>
@@ -256,6 +255,7 @@ export function InfractionsBrowser({
                 setSortDesc(true);
               }}
               className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground w-full"
+              aria-label="Trier par"
             >
               {sortColumns.map((c) => (
                 <option key={c.key} value={c.key}>
@@ -289,7 +289,7 @@ export function InfractionsBrowser({
                     Vitesse moy.
                   </th>
                   <th className="h-8 px-3 bg-secondary dark:bg-input/30 border-b border-input text-right text-muted-foreground font-medium">
-                    Duree
+                    Durée
                   </th>
                   <th className="h-8 px-3 bg-secondary dark:bg-input/30 border-b border-input text-right text-muted-foreground font-medium last:rounded-tr-lg">
                     Trajet

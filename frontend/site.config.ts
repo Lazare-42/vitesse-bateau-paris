@@ -35,6 +35,10 @@ export const SITE = {
   // Titre affiché sur la page d'accueil et dans le <title>.
   name: process.env.NEXT_PUBLIC_SITE_NAME || "Vitesse Bateau Paris",
 
+  // URL canonique du site (sans slash final). Utilisée pour les balises
+  // metadataBase, Open Graph, JSON-LD, sitemap, etc.
+  url: (process.env.NEXT_PUBLIC_SITE_URL || "https://vitessebateauparis.com").replace(/\/$/, ""),
+
   // Ville (utilisée dans les phrases : "...sur la Seine à <city>").
   city: process.env.NEXT_PUBLIC_CITY_NAME || "Paris",
 

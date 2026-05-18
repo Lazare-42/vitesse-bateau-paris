@@ -8,7 +8,7 @@ const LiveMap = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-[50vh] sm:h-[70vh] items-center justify-center rounded-lg border text-sm text-muted-foreground">
-        Chargement de la carte...
+        Chargement de la carte…
       </div>
     ),
   },

@@ -146,7 +146,7 @@ function InfractionPolyline({
         <div>
           {knotsToKmh(inf.max_speed_knots)} km/h (+{excess}%)
         </div>
-        <div>Duree: {duration(inf.started_at, inf.ended_at)}</div>
+        <div>Durée : {duration(inf.started_at, inf.ended_at)}</div>
         <div>{formatDateShort(inf.started_at)}</div>
       </div>
     </Popup>
@@ -187,7 +187,7 @@ type SortKey = "date" | "speed" | "excess";
 const sortColumns: { key: SortKey; label: string; shortLabel: string }[] = [
   { key: "date", label: "Date", shortLabel: "Date" },
   { key: "speed", label: "Vitesse max", shortLabel: "V. max" },
-  { key: "excess", label: "Exces", shortLabel: "Exces" },
+  { key: "excess", label: "Excès", shortLabel: "Excès" },
 ];
 
 function SortIcon({ active, desc }: { active: boolean; desc: boolean }) {
@@ -328,7 +328,7 @@ export function InfractionsMap({
             onClick={exitSoloMode}
             className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            Voir tous les exces
+            Voir tous les excès
           </button>
         </div>
       )}
@@ -421,7 +421,7 @@ export function InfractionsMap({
                   <br />
                   <span className="text-xs">
                     {infractions.filter((inf) => isInZone(inf, zone)).length}{" "}
-                    exces
+                    excès
                   </span>
                 </Popup>
               </Rectangle>
@@ -441,7 +441,7 @@ export function InfractionsMap({
 
       {/* Infraction count */}
       <p className="mt-3 text-sm text-muted-foreground">
-        {filtered.length} exces
+        {filtered.length} excès
         {selectedName ? ` — ${selectedName}` : ""}
         {selectedZone ? ` — zone ${selectedZone}` : ""}
       </p>
@@ -458,6 +458,7 @@ export function InfractionsMap({
                 setSortDesc(true);
               }}
               className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground w-full"
+              aria-label="Trier par"
             >
               {sortColumns.map((c) => (
                 <option key={c.key} value={c.key}>
@@ -488,7 +489,7 @@ export function InfractionsMap({
                     Bateau
                   </th>
                   <th className="h-8 px-3 bg-secondary dark:bg-input/30 border-b border-input text-right text-muted-foreground font-medium last:rounded-tr-lg">
-                    Duree
+                    Durée
                   </th>
                 </tr>
               </thead>

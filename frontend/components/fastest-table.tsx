@@ -36,7 +36,7 @@ export function FastestTable({ data }: { data: FastestEver[] }) {
   if (data.length === 0) {
     return (
       <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
-        Aucun exces enregistre pour le moment.
+        Aucun excès enregistré pour le moment.
       </div>
     );
   }
@@ -61,7 +61,7 @@ export function FastestTable({ data }: { data: FastestEver[] }) {
                 Moyenne
               </th>
               <th className="h-8 px-3 bg-secondary dark:bg-input/30 border-b border-input text-right text-muted-foreground font-medium">
-                Duree
+                Durée
               </th>
               <th className="h-8 px-3 bg-secondary dark:bg-input/30 border-b border-input text-right text-muted-foreground font-medium">
                 Date

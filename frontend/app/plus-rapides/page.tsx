@@ -1,8 +1,21 @@
+import type { Metadata } from "next";
 import { FastestTable, type FastestEver } from "@/components/fastest-table";
 import { MethodologyNote } from "@/components/methodology-note";
 import { SITE } from "@/site.config";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: `Les bateaux les plus rapides sur la ${SITE.river}`,
+  description: `Classement de tous les bateaux par leur vitesse maximale jamais enregistrée sur la ${SITE.river} à ${SITE.city}, sur la base des données AIS publiques.`,
+  alternates: { canonical: "/plus-rapides" },
+  openGraph: {
+    title: `Records de vitesse — ${SITE.name}`,
+    description: `Classement de tous les bateaux par leur vitesse maximale sur la ${SITE.river} à ${SITE.city}.`,
+    url: "/plus-rapides",
+    type: "website",
+  },
+};
 
 const API_URL = process.env.API_URL || "http://localhost:8092";
 

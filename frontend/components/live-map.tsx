@@ -200,7 +200,7 @@ export function LiveMap() {
   const ageStr = (() => {
     if (lastUpdate === 0) return "";
     const s = Math.floor((Date.now() - lastUpdate) / 1000);
-    if (s < 2) return "a l'instant";
+    if (s < 2) return "à l'instant";
     if (s < 60) return `il y a ${s}s`;
     const m = Math.floor(s / 60);
     return `il y a ${m} min`;

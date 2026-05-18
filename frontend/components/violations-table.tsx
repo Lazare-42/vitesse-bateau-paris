@@ -331,7 +331,7 @@ export function ViolationsTable({
                 Bateau
               </th>
               <th className="h-8 px-3 bg-secondary dark:bg-input/30 border-b border-input text-right text-muted-foreground font-medium">
-                Duree
+                Durée
               </th>
               <th className="h-8 px-3 bg-secondary dark:bg-input/30 border-b border-input text-right text-muted-foreground font-medium last:rounded-tr-lg">
                 Trajet

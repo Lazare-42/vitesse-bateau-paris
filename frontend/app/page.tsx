@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Stats } from "@/components/stats";
 import { type FastestEver } from "@/components/fastest-table";
 import { MethodologyNote } from "@/components/methodology-note";
@@ -5,6 +6,18 @@ import { HomeTabs } from "@/components/home-tabs";
 import { SITE, SPEED_LIMIT_KNOTS } from "@/site.config";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: `${SITE.name} — excès de vitesse en temps réel sur la ${SITE.river}`,
+  description: `Classement des bateaux les plus rapides et historique des excès de vitesse sur la ${SITE.river} à ${SITE.city}. Limite : ${SITE.speedLimitKmh} km/h. Données AIS rafraîchies toutes les 30 secondes.`,
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: `${SITE.name} — excès de vitesse en temps réel`,
+    description: `Classement des bateaux les plus rapides sur la ${SITE.river} à ${SITE.city}, limite ${SITE.speedLimitKmh} km/h.`,
+    url: "/",
+    type: "website",
+  },
+};
 
 const API_URL = process.env.API_URL || "http://localhost:8092";
 
