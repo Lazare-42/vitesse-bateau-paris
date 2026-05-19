@@ -2,6 +2,54 @@
 
 Operational notes for AI agents working in this repo.
 
+## Current state (read me first)
+
+**Two deployments share this codebase**, both run as systemd user units on the same host:
+
+| | Paris | Marne |
+| --- | --- | --- |
+| Code dir | `/data/lazrossi/code/vitesse-bateau-paris` (this repo) | `/data/lazrossi/code/vitesse-bateau-marne` (clone of same repo) |
+| Backend port | `8092` (`ports.vitesse-api`) | `8094` (`ports.vitesse-marne-api`) |
+| Frontend port | `3100` (`ports.vitesse-frontend`) | `3101` (`ports.vitesse-marne-frontend`) |
+| DB | `sillage_9ffe5e30` | `sillage_marne` |
+| Secrets | `/data/lazrossi/secrets/vitesse/env` | `/data/lazrossi/secrets/vitesse-marne/env` |
+| Public URL | `https://vitessebateauparis.com/` | `https://vitessebateauparis.com/marne/` |
+| Speed limit | 12 km/h | 15 km/h |
+
+Code is identical (`~/.local/bin/vitesse` is the shared Go binary); each checkout has its own `config.toml` + `frontend/.env.local` (both gitignored) + its own `frontend/.next` build because Next.js bakes `basePath` and `NEXT_PUBLIC_*` at build time.
+
+**Routes worth knowing**:
+- `GET /api/ws/live` — WebSocket push of every validated AIS position (one JSON `LivePosition` per message). Fed by `internal/broadcast.Hub`, consumed by `frontend/components/live-map.tsx` on `/direct`.
+- `/direct` — live map with WS-driven markers and a "En navigation" side panel.
+- `/plus-rapides` — top-50 records leaderboard.
+- `/marne/*` — entire Marne deployment, served via a Next.js build with `basePath: "/marne"`.
+
+**Nginx topology**: `nginx.vitessebateauparis.com` (system nginx, TLS-terminating) `→ 127.0.0.1:9100` (per-user nginx `nginx-lazrossi`) `→` the appropriate Next.js port (`3100` Paris / `3101` Marne) `→` Next.js rewrites `/api/*` server-side to the backend (`8092` / `8094`). WebSocket upgrades flow through this chain unchanged thanks to `proxyWebsockets = true` on the system nginx + Next.js 15's native WS rewrite handling. If you change routing, both nginx layers may need updating.
+
+**Standard rebuild cycle (frontend only)**:
+
+```bash
+# Paris (canonical checkout):
+cd /data/lazrossi/code/vitesse-bateau-paris/frontend && npm run build
+
+# Mirror to Marne:
+cd /data/lazrossi/code/vitesse-bateau-marne && git pull && cd frontend && npm run build
+
+systemctl --user restart vitesse-bateau-paris-frontend.service vitesse-bateau-marne-frontend.service
+```
+
+**Standard rebuild cycle (Go backend)**:
+
+```bash
+cd /data/lazrossi/code/vitesse-bateau-paris
+make build
+cp vitesse ~/.local/bin/vitesse.new && mv ~/.local/bin/vitesse.new ~/.local/bin/vitesse
+# both services share the binary; restart both
+systemctl --user restart vitesse-bateau-paris.service vitesse-bateau-marne.service
+```
+
+The sections below describe individual pieces in more detail.
+
 ## What this is
 
 `vitesse-bateau-paris` tracks AIS-reported speeding on the Seine inside Paris (12 km/h limit). Go backend ingests AIS, PostgreSQL stores positions + infractions, Next.js frontend renders the public site at vitessebateauparis.com.
