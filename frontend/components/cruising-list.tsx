@@ -37,8 +37,12 @@ function speedColor(p: LivePosition): string {
 
 export function CruisingList({
   positions,
+  selectedMmsi,
+  onSelect,
 }: {
   positions: Map<number, LivePosition>;
+  selectedMmsi?: number | null;
+  onSelect?: (mmsi: number) => void;
 }) {
   const cruising = Array.from(positions.values())
     .filter((p) => p.speed_knots >= CRUISING_MIN_KNOTS)
@@ -59,30 +63,42 @@ export function CruisingList({
       ) : (
         <ul
           className="divide-y overflow-y-auto"
-          style={{ maxHeight: "calc(50vh)" }}
+          style={{ maxHeight: "calc(100vh - 14rem)" }}
         >
-          {cruising.map((p) => (
-            <li
-              key={p.mmsi}
-              className="px-3 py-2 flex items-center gap-3 hover:bg-muted/40 transition-colors"
-            >
-              <div className={`text-base font-semibold tabular-nums w-16 text-right ${speedColor(p)}`}>
-                {knotsToKmh(p.speed_knots)}
-                <span className="text-[10px] font-normal text-muted-foreground ml-0.5">
-                  km/h
-                </span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">
-                  {p.vessel_name || "Inconnu"}
-                </p>
-                <p className="text-[10px] text-muted-foreground font-mono">
-                  MMSI {p.mmsi} &middot;{" "}
-                  <span suppressHydrationWarning>{formatAge(p.received_at)}</span>
-                </p>
-              </div>
-            </li>
-          ))}
+          {cruising.map((p) => {
+            const active = p.mmsi === selectedMmsi;
+            return (
+              <li key={p.mmsi}>
+                <button
+                  type="button"
+                  onClick={() => onSelect?.(p.mmsi)}
+                  className={`w-full text-left px-3 py-2 flex items-center gap-3 transition-colors ${
+                    active ? "bg-muted" : "hover:bg-muted/40"
+                  }`}
+                >
+                  <div
+                    className={`text-base font-semibold tabular-nums w-16 text-right ${speedColor(p)}`}
+                  >
+                    {knotsToKmh(p.speed_knots)}
+                    <span className="text-[10px] font-normal text-muted-foreground ml-0.5">
+                      km/h
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">
+                      {p.vessel_name || "Inconnu"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground font-mono">
+                      MMSI {p.mmsi} &middot;{" "}
+                      <span suppressHydrationWarning>
+                        {formatAge(p.received_at)}
+                      </span>
+                    </p>
+                  </div>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

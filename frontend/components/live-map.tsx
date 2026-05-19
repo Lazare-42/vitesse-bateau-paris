@@ -5,7 +5,7 @@ import {
   MapContainer,
   TileLayer,
   CircleMarker,
-  Popup,
+  useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { SITE, SPEED_LIMIT_KNOTS, BASE_PATH } from "@/site.config";
@@ -50,6 +50,30 @@ const BUCKET_STYLE: Record<
 type ConnectionState = "connecting" | "open" | "polling" | "error";
 type MobileView = "map" | "list";
 
+// Pans the map to the selected vessel once per selection change. Lives
+// inside <MapContainer> so it can grab the Leaflet map via useMap().
+// Deliberately does NOT auto-follow on every WS update — that feels
+// jittery; we want the boat to drift in-frame while the details card
+// updates live.
+function PanOnSelect({ selected }: { selected: LivePosition | null }) {
+  const map = useMap();
+  const lastPannedRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!selected) {
+      lastPannedRef.current = null;
+      return;
+    }
+    if (lastPannedRef.current === selected.mmsi) return;
+    lastPannedRef.current = selected.mmsi;
+    map.flyTo(
+      [selected.latitude, selected.longitude],
+      Math.max(map.getZoom(), 15),
+      { duration: 0.6 },
+    );
+  }, [selected, map]);
+  return null;
+}
+
 export function LiveMap() {
   const [positions, setPositions] = useState<Map<number, LivePosition>>(
     () => new Map(),
@@ -57,6 +81,7 @@ export function LiveMap() {
   const [mobileView, setMobileView] = useState<MobileView>("map");
   const [conn, setConn] = useState<ConnectionState>("connecting");
   const [lastUpdate, setLastUpdate] = useState(0);
+  const [selectedMmsi, setSelectedMmsi] = useState<number | null>(null);
   // Re-render every 1 s so the "il y a Xs" age string ticks smoothly and
   // the "stale" colouring transitions without waiting for a WS push.
   const [, setTick] = useState(0);
@@ -197,6 +222,8 @@ export function LiveMap() {
     return c;
   }, [positions]);
 
+  const selected = selectedMmsi != null ? positions.get(selectedMmsi) ?? null : null;
+
   const ageStr = (() => {
     if (lastUpdate === 0) return "";
     const s = Math.floor((Date.now() - lastUpdate) / 1000);
@@ -310,73 +337,112 @@ export function LiveMap() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div
-          className={`lg:col-span-2 ${mobileView !== "map" ? "hidden lg:block" : ""}`}
+          className={`lg:col-span-3 ${mobileView !== "map" ? "hidden lg:block" : ""}`}
         >
-          <div className="rounded-lg overflow-hidden border">
+          <div className="relative rounded-lg overflow-hidden border">
             <MapContainer
               center={SITE.mapCenter}
               zoom={SITE.mapZoom}
-              className="h-[50vh] sm:h-[70vh] w-full"
+              className="h-[60vh] sm:h-[calc(100vh-12rem)] w-full"
               attributionControl={false}
             >
               <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+              <PanOnSelect selected={selected} />
               {Array.from(positions.values()).map((p) => {
                 const b = bucketize(p);
                 const style = BUCKET_STYLE[b];
+                const isSelected = p.mmsi === selectedMmsi;
                 return (
                   <CircleMarker
                     key={p.mmsi}
                     center={[p.latitude, p.longitude]}
-                    radius={style.radius}
+                    radius={isSelected ? style.radius + 4 : style.radius}
                     pathOptions={{
-                      color: style.color,
+                      color: isSelected ? "#ffffff" : style.color,
                       fillColor: style.fill,
-                      fillOpacity: 0.8,
-                      weight: style.weight,
+                      fillOpacity: 0.9,
+                      weight: isSelected ? 3 : style.weight,
                     }}
-                  >
-                    <Popup>
-                      <div className="text-sm">
-                        <p className="font-semibold">
-                          {p.vessel_name || "Inconnu"}
-                        </p>
-                        <p className="text-xs text-muted-foreground font-mono">
-                          MMSI {p.mmsi}
-                        </p>
-                        <p className="mt-1">
-                          <span
-                            className={
-                              p.speed_knots > SPEED_LIMIT_KNOTS
-                                ? "font-medium text-speed-danger"
-                                : "font-medium"
-                            }
-                          >
-                            {knotsToKmh(p.speed_knots)} km/h
-                          </span>{" "}
-                          <span className="text-muted-foreground text-xs">
-                            ({p.speed_knots.toFixed(1)} nœuds)
-                          </span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Cap {Math.round(p.course)}° &middot;{" "}
-                          {formatAge(p.received_at)}
-                        </p>
-                      </div>
-                    </Popup>
-                  </CircleMarker>
+                    eventHandlers={{
+                      click: () => setSelectedMmsi(p.mmsi),
+                    }}
+                  />
                 );
               })}
             </MapContainer>
+            {selected && (
+              <SelectedCard
+                p={selected}
+                onClose={() => setSelectedMmsi(null)}
+              />
+            )}
           </div>
         </div>
 
         <div
           className={`lg:col-span-1 ${mobileView !== "list" ? "hidden lg:block" : ""}`}
         >
-          <CruisingList positions={positions} />
+          <CruisingList
+            positions={positions}
+            selectedMmsi={selectedMmsi}
+            onSelect={setSelectedMmsi}
+          />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SelectedCard({
+  p,
+  onClose,
+}: {
+  p: LivePosition;
+  onClose: () => void;
+}) {
+  const speeding = p.speed_knots > SPEED_LIMIT_KNOTS;
+  return (
+    <div className="absolute top-3 right-3 z-[400] w-64 rounded-lg border bg-card/95 backdrop-blur shadow-lg">
+      <div className="flex items-start justify-between gap-2 px-3 pt-2.5 pb-1">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold truncate">
+            {p.vessel_name || "Inconnu"}
+          </p>
+          <p className="text-[10px] text-muted-foreground font-mono">
+            MMSI {p.mmsi}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Désélectionner"
+          className="text-muted-foreground hover:text-foreground text-lg leading-none px-1"
+        >
+          ×
+        </button>
+      </div>
+      <div className="border-t px-3 py-2">
+        <p className="tabular-nums">
+          <span
+            className={
+              speeding
+                ? "text-xl font-bold text-speed-danger"
+                : "text-xl font-bold"
+            }
+          >
+            {knotsToKmh(p.speed_knots)}
+          </span>
+          <span className="text-xs text-muted-foreground ml-1">km/h</span>
+          <span className="text-xs text-muted-foreground ml-2">
+            ({p.speed_knots.toFixed(1)} nœuds)
+          </span>
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Cap {Math.round(p.course)}° &middot;{" "}
+          <span suppressHydrationWarning>{formatAge(p.received_at)}</span>
+        </p>
       </div>
     </div>
   );
