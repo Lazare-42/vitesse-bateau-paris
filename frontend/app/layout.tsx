@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
-import { Sofia_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { Nav } from "@/components/nav";
 import { SITE, SPEED_LIMIT_KNOTS } from "@/site.config";
 import "./globals.css";
 
-const sofiaSans = Sofia_Sans({
-  subsets: ["latin"],
+// Sofia Sans, bundled locally (OFL, from google/fonts) instead of
+// next/font/google — so the build is hermetic (no Google fetch at build time,
+// required for the Nix sandbox). Same family/appearance, same --font-sofia var.
+const sofiaSans = localFont({
+  src: "./fonts/SofiaSans.ttf",
   display: "swap",
-  weight: ["400", "500", "600", "700"],
+  weight: "400 700",
   variable: "--font-sofia",
 });
 
