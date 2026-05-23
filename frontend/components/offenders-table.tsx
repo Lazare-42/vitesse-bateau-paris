@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CarteLink } from "./carte-link";
+import { BoatThumb } from "./boat-thumb";
 import { BASE_PATH } from "@/site.config";
 
 interface Offender {
   mmsi: number;
   vessel_name: string;
+  photo_thumb_url?: string;
   infraction_count: number;
   max_speed_knots: number;
   avg_speed_knots: number;
@@ -160,6 +162,7 @@ function SortIcon({
 function aggregateOffenders(
   infractions: Infraction[],
   ratioByMmsi: Map<number, number>,
+  photoByMmsi: Map<number, string>,
 ): Offender[] {
   const byMmsi = new Map<number, Infraction[]>();
   for (const inf of infractions) {
@@ -191,6 +194,8 @@ function aggregateOffenders(
     result.push({
       mmsi,
       vessel_name: infs[0].vessel_name,
+      // Photo isn't on infraction rows; carry it from the server offenders list.
+      photo_thumb_url: photoByMmsi.get(mmsi),
       infraction_count: infs.length,
       max_speed_knots: maxSpeed,
       avg_speed_knots: avgSpeed,
@@ -246,14 +251,20 @@ export function OffendersTable({ data }: { data: Offender[] }) {
     return m;
   }, [data]);
 
+  const photoByMmsi = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const o of data) if (o.photo_thumb_url) m.set(o.mmsi, o.photo_thumb_url);
+    return m;
+  }, [data]);
+
   const effectiveData = useMemo(() => {
     if (minSpeedKmh === 0 || !allInfractions) return data;
     const minKnots = knotsFromKmh(minSpeedKmh);
     const filtered = allInfractions.filter(
       (inf) => inf.max_speed_knots >= minKnots,
     );
-    return aggregateOffenders(filtered, ratioByMmsi);
-  }, [data, allInfractions, minSpeedKmh, ratioByMmsi]);
+    return aggregateOffenders(filtered, ratioByMmsi, photoByMmsi);
+  }, [data, allInfractions, minSpeedKmh, ratioByMmsi, photoByMmsi]);
 
   const sorted = useMemo(() => {
     return [...effectiveData].sort((a, b) => {
@@ -376,15 +387,21 @@ export function OffendersTable({ data }: { data: Offender[] }) {
                 </td>
                 <td className="py-3 h-10 px-3">
                   <Link
-                    href={`/exces?bateau=${o.mmsi}`}
-                    className="hover:underline"
+                    href={`/bateau/${o.mmsi}`}
+                    className="flex items-center gap-3 hover:underline"
                   >
-                    <div className="font-medium">
-                      {o.vessel_name || "Inconnu"}
-                    </div>
-                    <div className="text-xs text-muted-foreground font-mono">
-                      MMSI {o.mmsi}
-                    </div>
+                    <BoatThumb
+                      src={o.photo_thumb_url}
+                      alt={o.vessel_name || `MMSI ${o.mmsi}`}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium truncate">
+                        {o.vessel_name || "Inconnu"}
+                      </span>
+                      <span className="block text-xs text-muted-foreground font-mono">
+                        MMSI {o.mmsi}
+                      </span>
+                    </span>
                   </Link>
                 </td>
                 <td className="py-3 h-10 px-3 text-right font-medium text-speed-danger">
@@ -429,14 +446,20 @@ export function OffendersTable({ data }: { data: Offender[] }) {
               className="block active:bg-muted/50 -m-4 p-4 rounded-lg"
             >
               <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-xs text-muted-foreground">#{i + 1}</span>
-                  <p className="font-semibold">
-                    {o.vessel_name || "Inconnu"}
-                  </p>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    MMSI {o.mmsi}
-                  </p>
+                <div className="flex items-start gap-3">
+                  <BoatThumb
+                    src={o.photo_thumb_url}
+                    alt={o.vessel_name || `MMSI ${o.mmsi}`}
+                  />
+                  <div>
+                    <span className="text-xs text-muted-foreground">
+                      #{i + 1}
+                    </span>
+                    <p className="font-semibold">{o.vessel_name || "Inconnu"}</p>
+                    <p className="text-xs text-muted-foreground font-mono">
+                      MMSI {o.mmsi}
+                    </p>
+                  </div>
                 </div>
                 <span className="inline-flex items-center rounded-md bg-speed-danger/10 px-2 py-0.5 text-xs font-medium text-speed-danger">
                   {formatPercent(o.excess_time_ratio)} du temps en excès

@@ -12,6 +12,14 @@ const API_URL = process.env.API_URL || "http://localhost:8092";
 export interface Offender {
   mmsi: number;
   vessel_name: string;
+  // Enrichment (VesselFinder), all optional — absent until a boat is enriched.
+  photo_thumb_url?: string;
+  photo_url?: string;
+  flag?: string;
+  type_text?: string;
+  length_m?: number;
+  beam_m?: number;
+  eni?: number;
   infraction_count: number;
   max_speed_knots: number;
   avg_speed_knots: number;

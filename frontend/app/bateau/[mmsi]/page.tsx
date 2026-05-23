@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/json-ld";
 import { CarteLink } from "@/components/carte-link";
+import { BoatThumb } from "@/components/boat-thumb";
 import { getOffenders, getOffenderDetail } from "@/lib/api";
 import {
   fmtKmh,
@@ -84,8 +85,22 @@ export default async function BateauPage({ params }: Params) {
     name,
     identifier: String(o.mmsi),
     url: `${SITE.url}/bateau/${o.mmsi}`,
+    ...(o.photo_url ? { image: o.photo_url } : {}),
     description: `Bateau suivi sur la ${SITE.river} à ${SITE.city} via les données AIS publiques. ${o.infraction_count} excès de vitesse enregistrés, vitesse maximale ${fmtKmh(o.max_speed_knots)} km/h.`,
   };
+
+  // Enrichment spec line (VesselFinder): type, flag, dimensions, inland id.
+  const specs: string[] = [];
+  if (o.type_text) specs.push(o.type_text);
+  if (o.flag) specs.push(o.flag);
+  if (o.length_m) {
+    specs.push(
+      o.beam_m
+        ? `${o.length_m.toFixed(0)} × ${o.beam_m.toFixed(0)} m`
+        : `${o.length_m.toFixed(0)} m`,
+    );
+  }
+  if (o.eni) specs.push(`ENI ${o.eni}`);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -105,11 +120,19 @@ export default async function BateauPage({ params }: Params) {
       </nav>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{name}</h1>
-          <p className="mt-1 text-sm text-muted-foreground font-mono">
-            MMSI {o.mmsi}
-          </p>
+        <div className="flex items-start gap-4">
+          <BoatThumb src={o.photo_url || o.photo_thumb_url} alt={name} size={96} />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{name}</h1>
+            <p className="mt-1 text-sm text-muted-foreground font-mono">
+              MMSI {o.mmsi}
+            </p>
+            {specs.length > 0 && (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {specs.join(" · ")}
+              </p>
+            )}
+          </div>
         </div>
         <CarteLink href={`/carte?bateau=${o.mmsi}`} />
       </div>

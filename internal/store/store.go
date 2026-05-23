@@ -38,12 +38,35 @@ type Store struct {
 }
 
 type Vessel struct {
-	MMSI      int       `json:"mmsi"`
-	Name      string    `json:"name"`
-	CallSign  string    `json:"call_sign,omitempty"`
-	ShipType  int       `json:"ship_type,omitempty"`
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
+	MMSI          int        `json:"mmsi"`
+	Name          string     `json:"name"`
+	CallSign      string     `json:"call_sign,omitempty"`
+	ShipType      int        `json:"ship_type,omitempty"`
+	PhotoURL      string     `json:"photo_url,omitempty"`
+	PhotoThumbURL string     `json:"photo_thumb_url,omitempty"`
+	ENI           int64      `json:"eni,omitempty"`
+	Flag          string     `json:"flag,omitempty"`
+	TypeText      string     `json:"type_text,omitempty"`
+	LengthM       float64    `json:"length_m,omitempty"`
+	BeamM         float64    `json:"beam_m,omitempty"`
+	FirstSeen     time.Time  `json:"first_seen"`
+	LastSeen      time.Time  `json:"last_seen"`
+	EnrichedAt    *time.Time `json:"enriched_at,omitempty"`
+}
+
+// Enrichment is the set of vessel metadata fetched from an external source
+// (currently the VesselFinder click API). Empty fields are left untouched by
+// UpdateVesselEnrichment so a later partial lookup never wipes good data.
+type Enrichment struct {
+	Name          string
+	CallSign      string
+	PhotoURL      string
+	PhotoThumbURL string
+	ENI           int64
+	Flag          string
+	TypeText      string
+	LengthM       float64
+	BeamM         float64
 }
 
 type Position struct {
@@ -76,6 +99,13 @@ type Infraction struct {
 type Offender struct {
 	MMSI                      int       `json:"mmsi"`
 	VesselName                string    `json:"vessel_name"`
+	PhotoThumbURL             string    `json:"photo_thumb_url,omitempty"`
+	PhotoURL                  string    `json:"photo_url,omitempty"`
+	Flag                      string    `json:"flag,omitempty"`
+	TypeText                  string    `json:"type_text,omitempty"`
+	LengthM                   float64   `json:"length_m,omitempty"`
+	BeamM                     float64   `json:"beam_m,omitempty"`
+	ENI                       int64     `json:"eni,omitempty"`
 	InfractionCount           int       `json:"infraction_count"`
 	MaxSpeedKnots             float64   `json:"max_speed_knots"`
 	AvgSpeedKnots             float64   `json:"avg_speed_knots"`
@@ -94,9 +124,10 @@ type Offender struct {
 
 // LivePosition is the latest position of a vessel for the real-time map.
 type LivePosition struct {
-	MMSI       int       `json:"mmsi"`
-	VesselName string    `json:"vessel_name"`
-	Latitude   float64   `json:"latitude"`
+	MMSI          int       `json:"mmsi"`
+	VesselName    string    `json:"vessel_name"`
+	PhotoThumbURL string    `json:"photo_thumb_url,omitempty"`
+	Latitude      float64   `json:"latitude"`
 	Longitude  float64   `json:"longitude"`
 	SpeedKnots float64   `json:"speed_knots"`
 	Course     float64   `json:"course"`
@@ -117,6 +148,7 @@ type VesselSpeedRow struct {
 	InfractionID    int64     `json:"infraction_id"`
 	MMSI            int       `json:"mmsi"`
 	VesselName      string    `json:"vessel_name"`
+	PhotoThumbURL   string    `json:"photo_thumb_url,omitempty"`
 	MaxSpeedKnots   float64   `json:"max_speed_knots"`
 	AvgSpeedKnots   float64   `json:"avg_speed_knots"`
 	SpeedLimitKnots float64   `json:"speed_limit_knots"`
@@ -190,6 +222,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		WITH `+presenceCTE+`
 		SELECT i.mmsi,
 		       COALESCE(NULLIF(v.name, ''), MAX(i.vessel_name), '') as vessel_name,
+		       COALESCE(v.photo_thumb_url, '') as photo_thumb_url,
 		       COUNT(*) as infraction_count,
 		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
 		       MAX(i.ended_at) as last_infraction,
@@ -209,7 +242,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		  -- ratio is meaningless (boats seen only during one infraction
 		  -- always score 100%).
 		  AND p.time_in_zone_seconds >= 600
-		GROUP BY i.mmsi, v.name, p.time_in_zone_seconds
+		GROUP BY i.mmsi, v.name, v.photo_thumb_url, p.time_in_zone_seconds
 		ORDER BY excess_ratio DESC, total_excess_seconds DESC
 		LIMIT $1
 	`, limit)
@@ -221,7 +254,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 	var offenders []Offender
 	for rows.Next() {
 		var o Offender
-		if err := rows.Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
+		if err := rows.Scan(&o.MMSI, &o.VesselName, &o.PhotoThumbURL, &o.InfractionCount,
 			&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
 			&o.AvgInfractionDurationSecs, &o.TotalExcessSeconds, &o.ExcessTimeRatio); err != nil {
 			return nil, err
@@ -244,6 +277,13 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		)
 		SELECT i.mmsi,
 		       COALESCE(NULLIF(v.name, ''), MAX(i.vessel_name), '') as vessel_name,
+		       COALESCE(v.photo_thumb_url, '') as photo_thumb_url,
+		       COALESCE(v.photo_url, '') as photo_url,
+		       COALESCE(v.flag, '') as flag,
+		       COALESCE(v.type_text, '') as type_text,
+		       COALESCE(v.length_m, 0) as length_m,
+		       COALESCE(v.beam_m, 0) as beam_m,
+		       COALESCE(v.eni, 0) as eni,
 		       COUNT(*) as infraction_count,
 		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
 		       MAX(i.ended_at) as last_infraction,
@@ -259,8 +299,8 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
 		WHERE i.mmsi = $1 AND `+sustainedFilter+`
-		GROUP BY i.mmsi, v.name
-	`, mmsi).Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
+		GROUP BY i.mmsi, v.name, v.photo_thumb_url, v.photo_url, v.flag, v.type_text, v.length_m, v.beam_m, v.eni
+	`, mmsi).Scan(&o.MMSI, &o.VesselName, &o.PhotoThumbURL, &o.PhotoURL, &o.Flag, &o.TypeText, &o.LengthM, &o.BeamM, &o.ENI, &o.InfractionCount,
 		&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
 		&o.AvgInfractionDurationSecs, &o.TotalExcessSeconds, &o.ExcessTimeRatio)
 	if err == sql.ErrNoRows {
@@ -415,6 +455,7 @@ func (s *Store) FastestVessels(ctx context.Context, limit int) ([]VesselSpeedRow
 		SELECT DISTINCT ON (i.mmsi)
 		       i.id, i.mmsi,
 		       COALESCE(NULLIF(v.name, ''), i.vessel_name, '') as vessel_name,
+		       COALESCE(v.photo_thumb_url, '') as photo_thumb_url,
 		       i.max_speed_knots, i.avg_speed_knots, i.speed_limit_knots,
 		       i.started_at, i.ended_at,
 		       EXTRACT(EPOCH FROM (i.ended_at - i.started_at))::int as duration_seconds
@@ -431,7 +472,7 @@ func (s *Store) FastestVessels(ctx context.Context, limit int) ([]VesselSpeedRow
 	var out []VesselSpeedRow
 	for rows.Next() {
 		var r VesselSpeedRow
-		if err := rows.Scan(&r.InfractionID, &r.MMSI, &r.VesselName, &r.MaxSpeedKnots, &r.AvgSpeedKnots,
+		if err := rows.Scan(&r.InfractionID, &r.MMSI, &r.VesselName, &r.PhotoThumbURL, &r.MaxSpeedKnots, &r.AvgSpeedKnots,
 			&r.SpeedLimitKnots, &r.StartedAt, &r.EndedAt, &r.DurationSeconds); err != nil {
 			return nil, err
 		}
@@ -458,6 +499,7 @@ func (s *Store) LivePositions(ctx context.Context, sinceMinutes int) ([]LivePosi
 		SELECT DISTINCT ON (p.mmsi)
 		       p.mmsi,
 		       COALESCE(NULLIF(v.name, ''), '') as vessel_name,
+		       COALESCE(v.photo_thumb_url, '') as photo_thumb_url,
 		       p.latitude, p.longitude, p.speed_knots, p.course, p.received_at
 		FROM positions p
 		LEFT JOIN vessels v ON p.mmsi = v.mmsi
@@ -472,7 +514,7 @@ func (s *Store) LivePositions(ctx context.Context, sinceMinutes int) ([]LivePosi
 	var out []LivePosition
 	for rows.Next() {
 		var p LivePosition
-		if err := rows.Scan(&p.MMSI, &p.VesselName, &p.Latitude, &p.Longitude,
+		if err := rows.Scan(&p.MMSI, &p.VesselName, &p.PhotoThumbURL, &p.Latitude, &p.Longitude,
 			&p.SpeedKnots, &p.Course, &p.ReceivedAt); err != nil {
 			return nil, err
 		}
@@ -503,6 +545,55 @@ func (s *Store) UnnamedVessels(ctx context.Context, limit int) ([]int, error) {
 		mmsis = append(mmsis, mmsi)
 	}
 	return mmsis, rows.Err()
+}
+
+// VesselsNeedingEnrichment returns MMSIs of vessels never enriched (photo,
+// dimensions, ENI, etc.), most-recently-seen first, limited to n. enriched_at
+// is set on every attempt, so a vessel with no public record is tried once and
+// then left alone.
+func (s *Store) VesselsNeedingEnrichment(ctx context.Context, limit int) ([]int, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT mmsi FROM vessels
+		WHERE enriched_at IS NULL
+		ORDER BY last_seen DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var mmsis []int
+	for rows.Next() {
+		var mmsi int
+		if err := rows.Scan(&mmsi); err != nil {
+			return nil, err
+		}
+		mmsis = append(mmsis, mmsi)
+	}
+	return mmsis, rows.Err()
+}
+
+// UpdateVesselEnrichment writes externally-fetched metadata onto a vessel row
+// and stamps enriched_at. Empty/zero fields in e leave the existing column
+// untouched, so a partial lookup never overwrites good data; the name is only
+// filled when currently blank (AIS-reported names take precedence).
+func (s *Store) UpdateVesselEnrichment(ctx context.Context, mmsi int, e Enrichment) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE vessels SET
+			name            = CASE WHEN (name = '' OR name IS NULL) AND $2 <> '' THEN $2 ELSE name END,
+			call_sign       = CASE WHEN (call_sign = '' OR call_sign IS NULL) AND $3 <> '' THEN $3 ELSE call_sign END,
+			photo_url       = CASE WHEN $4 <> '' THEN $4 ELSE photo_url END,
+			photo_thumb_url = CASE WHEN $5 <> '' THEN $5 ELSE photo_thumb_url END,
+			eni             = CASE WHEN $6 <> 0 THEN $6 ELSE eni END,
+			flag            = CASE WHEN $7 <> '' THEN $7 ELSE flag END,
+			type_text       = CASE WHEN $8 <> '' THEN $8 ELSE type_text END,
+			length_m        = CASE WHEN $9 <> 0 THEN $9 ELSE length_m END,
+			beam_m          = CASE WHEN $10 <> 0 THEN $10 ELSE beam_m END,
+			enriched_at     = NOW()
+		WHERE mmsi = $1
+	`, mmsi, e.Name, e.CallSign, e.PhotoURL, e.PhotoThumbURL, e.ENI, e.Flag, e.TypeText, e.LengthM, e.BeamM)
+	return err
 }
 
 // BackfillInfractionNames updates infraction records that have no vessel name.

@@ -44,4 +44,21 @@ CREATE TABLE IF NOT EXISTS infractions (
 CREATE INDEX IF NOT EXISTS idx_infractions_mmsi ON infractions(mmsi);
 CREATE INDEX IF NOT EXISTS idx_infractions_started_at ON infractions(started_at);
 CREATE INDEX IF NOT EXISTS idx_infractions_max_speed ON infractions(max_speed_knots DESC);
+
+-- Enrichment columns, filled by internal/enrich from the VesselFinder click
+-- API (one HTTP call already made for name lookups). photo_* are public
+-- ship-photo URLs; eni is the European inland-vessel registry id (the key for
+-- any future owner/operator lookup); length_m/beam_m come from the same call.
+-- enriched_at is set on every attempt (success or not) so we don't re-hit the
+-- upstream for vessels that simply have no public record.
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS photo_url       TEXT NOT NULL DEFAULT '';
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS photo_thumb_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS eni             BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS flag            TEXT NOT NULL DEFAULT '';
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS type_text       TEXT NOT NULL DEFAULT '';
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS length_m        DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS beam_m          DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS enriched_at     TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_vessels_enriched_at ON vessels(enriched_at);
 `
