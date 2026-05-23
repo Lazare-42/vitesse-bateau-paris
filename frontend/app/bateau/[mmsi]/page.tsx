@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/json-ld";
 import { CarteLink } from "@/components/carte-link";
 import { BoatThumb } from "@/components/boat-thumb";
-import { getOffenders, getOffenderDetail } from "@/lib/api";
+import { getOffenders, getOffenderDetail, vesselSpecs } from "@/lib/api";
 import {
   fmtKmh,
   fmtDate,
@@ -37,8 +37,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   }
   const o = data.offender;
   const name = o.vessel_name || `MMSI ${o.mmsi}`;
+  const specsText = vesselSpecs(o).join(" · ");
   const title = `${name} — excès de vitesse sur la ${SITE.river}`;
-  const description = `${name} (MMSI ${o.mmsi}) : ${o.infraction_count} excès de vitesse enregistrés sur la ${SITE.river} à ${SITE.city}, vitesse maximale ${fmtKmh(o.max_speed_knots)} km/h. Historique détaillé des dépassements à partir des données AIS publiques.`;
+  const description = `${name} (MMSI ${o.mmsi}) : ${o.infraction_count} excès de vitesse enregistrés sur la ${SITE.river} à ${SITE.city}, vitesse maximale ${fmtKmh(o.max_speed_knots)} km/h.${specsText ? ` ${specsText}.` : ""} Historique détaillé des dépassements à partir des données AIS publiques.`;
   return {
     title,
     description,
@@ -85,22 +86,15 @@ export default async function BateauPage({ params }: Params) {
     name,
     identifier: String(o.mmsi),
     url: `${SITE.url}/bateau/${o.mmsi}`,
-    ...(o.photo_url ? { image: o.photo_url } : {}),
+    ...(o.photo_url || o.photo_thumb_url
+      ? { image: o.photo_url || o.photo_thumb_url }
+      : {}),
+    ...(o.type_text ? { vehicleConfiguration: o.type_text } : {}),
     description: `Bateau suivi sur la ${SITE.river} à ${SITE.city} via les données AIS publiques. ${o.infraction_count} excès de vitesse enregistrés, vitesse maximale ${fmtKmh(o.max_speed_knots)} km/h.`,
   };
 
-  // Enrichment spec line (VesselFinder): type, flag, dimensions, inland id.
-  const specs: string[] = [];
-  if (o.type_text) specs.push(o.type_text);
-  if (o.flag) specs.push(o.flag);
-  if (o.length_m) {
-    specs.push(
-      o.beam_m
-        ? `${o.length_m.toFixed(0)} × ${o.beam_m.toFixed(0)} m`
-        : `${o.length_m.toFixed(0)} m`,
-    );
-  }
-  if (o.eni) specs.push(`ENI ${o.eni}`);
+  // Enrichment spec chips (VesselFinder): type, flag, dimensions, inland id.
+  const specs = vesselSpecs(o);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">

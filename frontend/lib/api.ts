@@ -51,6 +51,23 @@ export interface OffenderDetail {
   infractions: Infraction[];
 }
 
+// Human-readable spec chips from VesselFinder enrichment, in display order.
+// Empty entries are dropped, so callers can `.join(" · ")` safely.
+export function vesselSpecs(o: Offender): string[] {
+  const specs: string[] = [];
+  if (o.type_text) specs.push(o.type_text);
+  if (o.flag) specs.push(o.flag);
+  if (o.length_m) {
+    specs.push(
+      o.beam_m
+        ? `${o.length_m.toFixed(0)} × ${o.beam_m.toFixed(0)} m`
+        : `${o.length_m.toFixed(0)} m`,
+    );
+  }
+  if (o.eni) specs.push(`ENI ${o.eni}`);
+  return specs;
+}
+
 // The set of boats worth a dedicated page + sitemap entry: the top offenders
 // (boats with at least one recorded infraction). Capped at 100 server-side.
 export async function getOffenders(limit = 100): Promise<Offender[]> {
