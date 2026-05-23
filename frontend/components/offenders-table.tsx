@@ -210,7 +210,7 @@ function aggregateOffenders(
 }
 
 export function OffendersTable({ data }: { data: Offender[] }) {
-  const [sortKey, setSortKey] = useState<SortKey>("excess_time_ratio");
+  const [sortKey, setSortKey] = useState<SortKey>("total_excess_seconds");
   const [desc, setDesc] = useState(true);
   const [minSpeedKmh, setMinSpeedKmh] = useState(0);
   const [allInfractions, setAllInfractions] = useState<Infraction[] | null>(null);

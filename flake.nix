@@ -14,7 +14,7 @@
       mkFrontend = pkgs: basePath:
         pkgs.buildNpmPackage {
           pname = "vitesse-frontend${if basePath == "" then "" else "-marne"}";
-          version = "0.1.0";
+          version = "0.1.1";
           src = ./frontend;
           npmDepsHash = "sha256-N4aFSUezuSqyvCbDDACRcXqmWlyoprmVGlJrfJ8to38=";
           nativeBuildInputs = [ pkgs.makeWrapper ];
@@ -41,7 +41,7 @@
         let pkgs = pkgsFor s; in {
           default = pkgs.buildGoModule {
             pname = "vitesse";
-            version = "0.1.0";
+            version = "0.1.1";
             src = ./.;
             vendorHash = "sha256-zkrkIPndfs/o1tqRDweK8OIU/HeqXf7ltcn46vJmOb8=";
             subPackages = [ "cmd/vitesse" ];
