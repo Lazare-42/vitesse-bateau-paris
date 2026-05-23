@@ -80,7 +80,7 @@ export function FastestTable({ data }: { data: FastestEver[] }) {
                 <td className="py-3 h-10 px-3 text-muted-foreground">{i + 1}</td>
                 <td className="py-3 h-10 px-3">
                   <Link
-                    href={`/exces?bateau=${r.mmsi}`}
+                    href={`/bateau/${r.mmsi}`}
                     className="hover:underline"
                   >
                     <div className="font-medium">
@@ -126,7 +126,7 @@ export function FastestTable({ data }: { data: FastestEver[] }) {
             className="rounded-lg border bg-card p-4 text-card-foreground transition-colors"
           >
             <Link
-              href={`/exces?bateau=${r.mmsi}`}
+              href={`/bateau/${r.mmsi}`}
               className="block active:bg-muted/50 -m-4 p-4 rounded-lg"
             >
               <div className="flex items-start justify-between">

@@ -85,6 +85,26 @@ export default function RootLayout({
       email: "lazare.bot@gmail.com",
       sameAs: ["https://github.com/Lazare-42/vitesse-bateau-paris"],
     },
+    {
+      "@context": "https://schema.org",
+      "@type": "Dataset",
+      name: `Excès de vitesse des bateaux sur la ${SITE.river} à ${SITE.city}`,
+      description,
+      url: SITE.url,
+      inLanguage: "fr-FR",
+      isAccessibleForFree: true,
+      creator: { "@type": "Person", name: "Lazare Rossillon" },
+      keywords: [
+        "AIS",
+        "vitesse bateau",
+        SITE.river,
+        SITE.city,
+        "navigation fluviale",
+        "excès de vitesse",
+      ],
+      measurementTechnique: "AIS (Automatic Identification System)",
+      variableMeasured: "Vitesse des bateaux (SOG, nœuds / km/h)",
+    },
   ];
 
   return (
