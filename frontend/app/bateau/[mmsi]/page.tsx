@@ -4,7 +4,13 @@ import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/json-ld";
 import { CarteLink } from "@/components/carte-link";
 import { BoatThumb } from "@/components/boat-thumb";
-import { getOffenders, getOffenderDetail, vesselSpecs } from "@/lib/api";
+import { BoatTrajetMapWrapper } from "@/components/boat-trajet-map-wrapper";
+import {
+  getOffenders,
+  getOffenderDetail,
+  vesselSpecs,
+  isPassengerVessel,
+} from "@/lib/api";
 import {
   fmtKmh,
   fmtDate,
@@ -87,7 +93,13 @@ export default async function BateauPage({ params }: Params) {
     identifier: String(o.mmsi),
     url: `${SITE.url}/bateau/${o.mmsi}`,
     ...(o.photo_url || o.photo_thumb_url
-      ? { image: o.photo_url || o.photo_thumb_url }
+      ? {
+          image: {
+            "@type": "ImageObject",
+            url: o.photo_url || o.photo_thumb_url,
+            caption: name,
+          },
+        }
       : {}),
     ...(o.type_text ? { vehicleConfiguration: o.type_text } : {}),
     description: `Bateau suivi sur la ${SITE.river} à ${SITE.city} via les données AIS publiques. ${o.infraction_count} excès de vitesse enregistrés, vitesse maximale ${fmtKmh(o.max_speed_knots)} km/h.`,
@@ -95,6 +107,8 @@ export default async function BateauPage({ params }: Params) {
 
   // Enrichment spec chips (VesselFinder): type, flag, dimensions, inland id.
   const specs = vesselSpecs(o);
+  // Only label genuine passenger boats — never a cargo péniche.
+  const passenger = isPassengerVessel(o.type_text);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -133,7 +147,11 @@ export default async function BateauPage({ params }: Params) {
 
       {/* Lede — unique, data-first summary */}
       <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-        <strong className="text-foreground">{name}</strong> a été enregistré{" "}
+        <strong className="text-foreground">{name}</strong>
+        {passenger
+          ? ", un bateau à passagers (bateau-mouche ou vedette),"
+          : ""}{" "}
+        a été enregistré{" "}
         <strong className="text-foreground">{o.infraction_count}</strong> fois en
         excès de vitesse sur la {SITE.river} à {SITE.city}. Sa vitesse maximale
         relevée est de{" "}
@@ -156,6 +174,20 @@ export default async function BateauPage({ params }: Params) {
         <Stat label="Temps en excès" value={fmtLongDuration(o.total_excess_seconds)} />
         <Stat label="% du temps en excès" value={fmtPercent(o.excess_time_ratio)} />
       </div>
+
+      {/* Trajets — each excès drawn as a segment on the river */}
+      {infractions.length > 0 && (
+        <>
+          <h2 className="mt-10 mb-3 text-lg font-semibold">
+            Trajets des excès
+          </h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Chaque segment relie le début et la fin d&apos;un excès. Cliquez sur
+            un trajet pour voir la vitesse et la date.
+          </p>
+          <BoatTrajetMapWrapper infractions={infractions} />
+        </>
+      )}
 
       {/* Infraction history */}
       <h2 className="mt-10 mb-3 text-lg font-semibold">Historique des excès</h2>

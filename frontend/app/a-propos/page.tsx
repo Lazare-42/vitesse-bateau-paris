@@ -1,5 +1,23 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { JsonLd } from "@/components/json-ld";
 import { SITE } from "@/site.config";
+
+// Methodology-focused FAQ (distinct from the pillar page's speed/limit FAQ).
+const faq = [
+  {
+    q: "Quels bateaux sont inclus dans le suivi ?",
+    a: `Tous les bateaux qui émettent en AIS dans la zone de la ${SITE.river} à ${SITE.city} : bateaux à passagers (bateaux-mouches, vedettes), péniches de fret, vedettes de service et plaisanciers. Aucun filtrage par type n'est appliqué.`,
+  },
+  {
+    q: "Les petites embarcations sont-elles visibles ?",
+    a: "Non. Les avirons, kayaks, paddles et petits hors-bord de loisir n'ont pas de transpondeur AIS et n'apparaissent donc pas dans le suivi.",
+  },
+  {
+    q: "Pourquoi un bateau peut-il disparaître du suivi ?",
+    a: "Un bateau qui éteint son transpondeur AIS cesse d'être visible. C'est normalement interdit en navigation commerciale. Les coupures de signal sous les ponts peuvent aussi créer de brèves absences.",
+  },
+];
 
 export const metadata: Metadata = {
   title: `À propos — ${SITE.name}`,
@@ -14,8 +32,19 @@ export const metadata: Metadata = {
 };
 
 export default function AProposPage() {
+  const faqLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faq.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  };
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+      <JsonLd data={faqLd} />
       <h1 className="text-2xl font-bold tracking-tight">Comment ça marche</h1>
 
       <div className="mt-6 space-y-6 text-sm leading-relaxed text-muted-foreground">
@@ -194,6 +223,29 @@ export default function AProposPage() {
               sont stockées à pleine résolution (chaque ping).
             </li>
           </ul>
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-base font-semibold text-foreground">
+            Questions fréquentes
+          </h2>
+          <dl className="space-y-4">
+            {faq.map((f) => (
+              <div key={f.q}>
+                <dt className="font-medium text-foreground">{f.q}</dt>
+                <dd className="mt-1">{f.a}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-4">
+            Voir aussi notre dossier :{" "}
+            <Link
+              href="/dossiers/vitesse-bateaux-mouches"
+              className="underline hover:text-foreground transition-colors"
+            >
+              à quelle vitesse vont les bateaux-mouches sur la {SITE.river} ?
+            </Link>
+          </p>
         </section>
 
         <section>

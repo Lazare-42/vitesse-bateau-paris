@@ -24,6 +24,11 @@ const CORE: {
   { path: "/exces", changeFrequency: "hourly", priority: 0.9 },
   { path: "/plus-rapides", changeFrequency: "daily", priority: 0.8 },
   { path: "/carte", changeFrequency: "hourly", priority: 0.8 },
+  {
+    path: "/dossiers/vitesse-bateaux-mouches",
+    changeFrequency: "weekly",
+    priority: 0.7,
+  },
   { path: "/a-propos", changeFrequency: "monthly", priority: 0.5 },
 ];
 

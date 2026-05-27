@@ -9,6 +9,7 @@ const links = [
   { href: "/exces", label: "Tous les excès" },
   { href: "/plus-rapides", label: "Records" },
   { href: "/carte", label: "Carte" },
+  { href: "/dossiers/vitesse-bateaux-mouches", label: "Bateaux-mouches" },
   { href: "/a-propos", label: "À propos" },
 ];
 

@@ -51,6 +51,14 @@ export interface OffenderDetail {
   infractions: Infraction[];
 }
 
+// True only when the enriched type marks a passenger vessel — the category
+// that includes bateaux-mouches and vedettes. Cargo péniches, tugs, service
+// craft, etc. return false, so we never mislabel a freight barge as a
+// bateau-mouche. Conservative: matches only an explicit "passenger" type.
+export function isPassengerVessel(typeText?: string): boolean {
+  return !!typeText && /passenger|passager/i.test(typeText);
+}
+
 // Human-readable spec chips from VesselFinder enrichment, in display order.
 // Empty entries are dropped, so callers can `.join(" · ")` safely.
 export function vesselSpecs(o: Offender): string[] {
