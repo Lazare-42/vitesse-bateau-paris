@@ -16,7 +16,7 @@ Operational notes for AI agents working in this repo.
 | Public URL | `https://vitessebateauparis.com/` | `https://vitessebateauparis.com/marne/` |
 | Speed limit | 12 km/h | 15 km/h |
 
-Code is identical (`~/.local/bin/vitesse` is the shared Go binary); each checkout has its own `config.toml` + `frontend/.env.local` (both gitignored) + its own `frontend/.next` build because Next.js bakes `basePath` and `NEXT_PUBLIC_*` at build time.
+Code is identical; both run from the Nix-built packages (`pkgs.vitesse`, `pkgs.vitesse-frontend`, `pkgs.vitesse-marne-frontend`). Each checkout has its own `config.toml` (gitignored). **Frontend site settings (`NEXT_PUBLIC_*`) live in `flake.nix` → `siteEnv`**, not in `.env.local`: the Nix source excludes gitignored files, so values only in `.env.local` never reach the deployed build.
 
 **Routes worth knowing**:
 - `GET /api/ws/live` — WebSocket push of every validated AIS position (one JSON `LivePosition` per message). Fed by `internal/broadcast.Hub`, consumed by `frontend/components/live-map.tsx` on `/direct`.
@@ -128,7 +128,11 @@ Each fork has its own Postgres database; no multi-tenant schema.
 
 - **Speed limit**: 12 km/h (6.5 knots). Hardcoded in the ingest path.
 - **Sustained-infraction threshold**: 30 seconds. Defined as `sustainedFilter` in `internal/store/store.go` and applied to every public query so brief GPS spikes (typically under bridges) don't count. Surface this in any new query that feeds public stats.
-- **AIS scope**: no ship-type filter — we capture every `PositionReport`, `StandardClassBPositionReport`, and `ShipStaticData` in the Paris bbox. See `internal/ais/client.go`. The /a-propos page explains this publicly; do not silently narrow the scope.
+- **AIS scope**: no ship-type filter at ingest — we capture every `PositionReport`, `StandardClassBPositionReport`, and `ShipStaticData` in the Paris bbox. See `internal/ais/client.go`. The /a-propos page explains this publicly; do not silently narrow the scope.
+- **Public filter** (`Store.publicFilter()` in `internal/store/store.go`): every public infraction query = sustained (≥30 s) AND NOT exempt vessel (military / SAR / law enforcement type, or `vessels.exempt`) AND NOT implausible (≥20 m hull above 30 km/h) AND start inside `legal_bbox`. Use it — not `sustainedFilter` alone — for anything public. Documented on /a-propos#fiabilite.
+- **Time shares** (`boat_days`, refreshed every 15 min by `internal/jobs`): each stored ping weighs the gap to the vessel's next ping, capped at 60 s if speeding (full-rate storage) and 330 s otherwise (5-min throttle). Never compute shares from raw ping counts: speeding pings are ~30× more numerous and would dominate.
+- **River flow**: daily Hub'Eau import (`[river] hubeau_station`); `/evolution` splits downstream/upstream because SOG is inflated by current downstream.
+- **Operators**: curated MMSI → company mapping in `internal/store/operators.go` (public sources only; never overrides a manual `vessels.operator_slug`).
 
 ## Things that look wrong but aren't
 
