@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { CarteLink } from "./carte-link";
 import { BASE_PATH } from "@/site.config";
@@ -399,7 +400,8 @@ export function ViolationsTable({
       {/* Mobile cards */}
       <div className="sm:hidden flex flex-col gap-3">
         {sorted.map((inf) => (
-          <a
+          <Link
+            prefetch={false}
             key={inf.id}
             href={carteUrl(inf)}
             target="_blank"
@@ -459,7 +461,7 @@ export function ViolationsTable({
             <p className="mt-2 text-xs text-muted-foreground">
               {formatDateShort(inf.started_at)}
             </p>
-          </a>
+          </Link>
         ))}
       </div>
     </>

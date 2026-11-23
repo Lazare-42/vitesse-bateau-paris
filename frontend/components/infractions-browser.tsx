@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -343,7 +344,8 @@ export function InfractionsBrowser({
                       )}
                     </td>
                     <td className="py-3 h-10 px-3 text-right">
-                      <a
+                      <Link
+                        prefetch={false}
                         href={carteUrl(inf)}
                         className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                       >
@@ -366,7 +368,7 @@ export function InfractionsBrowser({
                           />
                         </svg>
                         Carte
-                      </a>
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -377,7 +379,8 @@ export function InfractionsBrowser({
           {/* Mobile cards */}
           <div className="sm:hidden flex flex-col gap-3">
             {sorted.map((inf) => (
-              <a
+              <Link
+                prefetch={false}
                 key={inf.id}
                 href={carteUrl(inf)}
                 className="block rounded-lg border bg-card p-4 text-card-foreground active:bg-muted/50 transition-colors"
@@ -439,7 +442,7 @@ export function InfractionsBrowser({
                 <p className="mt-2 text-xs text-muted-foreground">
                   {formatDateShort(inf.started_at)}
                 </p>
-              </a>
+              </Link>
             ))}
           </div>
         </>

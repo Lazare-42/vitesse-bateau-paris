@@ -16,6 +16,7 @@
       # .env.local, which made the Nix-built Marne site render Paris defaults).
       siteEnv = {
         paris = {
+          API_URL = "http://127.0.0.1:8092";
           NEXT_PUBLIC_BASE_PATH = "";
           NEXT_PUBLIC_MAP_ZONES = builtins.toJSON [
             { name = "Boulogne"; bounds = [ [ 48.8385 2.2565 ] [ 48.8585 2.2875 ] ]; }
@@ -29,6 +30,8 @@
           NEXT_PUBLIC_LAUNCH_DATE = "";
         };
         marne = {
+          API_URL = "http://127.0.0.1:8094";
+          NEXT_PUBLIC_SITE_URL = "https://vitessebateauparis.com/marne";
           NEXT_PUBLIC_BASE_PATH = "/marne";
           NEXT_PUBLIC_SITE_NAME = "Vitesse Bateau Marne";
           NEXT_PUBLIC_CITY_NAME = "Val-de-Marne";
