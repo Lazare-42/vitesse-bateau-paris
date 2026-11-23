@@ -30,22 +30,28 @@ func (s *Store) RefreshBoatDays(ctx context.Context, from time.Time) error {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO boat_days (mmsi, day, dir, n, n_over, n_over15, n_over20, sum_kmh)
-		SELECT mmsi, day, dir, COUNT(*),
-		       SUM((speed_knots > $2)::int),
-		       SUM((speed_knots * 1.852 > 15)::int),
-		       SUM((speed_knots * 1.852 > 20)::int),
-		       SUM(speed_knots * 1.852)
+		INSERT INTO boat_days (mmsi, day, dir, secs, secs_over, secs_over15, secs_over20, kmh_secs)
+		SELECT mmsi, day, dir, SUM(w),
+		       COALESCE(SUM(w) FILTER (WHERE speed_knots > $2), 0),
+		       COALESCE(SUM(w) FILTER (WHERE speed_knots * 1.852 > 15), 0),
+		       COALESCE(SUM(w) FILTER (WHERE speed_knots * 1.852 > 20), 0),
+		       SUM(w * speed_knots * 1.852)
 		FROM (
-		  SELECT DISTINCT ON (mmsi, date_trunc('hour', received_at), floor(extract(minute FROM received_at) / 5))
-		         mmsi, speed_knots,
+		  SELECT mmsi, speed_knots,
 		         (received_at AT TIME ZONE 'Europe/Paris')::date AS day,
-		         CASE WHEN sin(radians(course)) < 0 THEN 'down' ELSE 'up' END AS dir
+		         CASE WHEN sin(radians(course)) < 0 THEN 'down' ELSE 'up' END AS dir,
+		         received_at,
+		         LEAST(
+		           EXTRACT(EPOCH FROM LEAD(received_at) OVER (PARTITION BY mmsi ORDER BY received_at) - received_at),
+		           CASE WHEN speed_knots > $2 THEN 60 ELSE 330 END
+		         ) AS w
 		  FROM positions
-		  WHERE speed_knots > 1 AND speed_knots < 30
-		    AND received_at >= ($1::date)::timestamp AT TIME ZONE 'Europe/Paris'
-		  ORDER BY mmsi, date_trunc('hour', received_at), floor(extract(minute FROM received_at) / 5), received_at
+		  -- one hour of look-back so the first ping of the window has a successor context
+		  WHERE received_at >= ($1::date)::timestamp AT TIME ZONE 'Europe/Paris' - INTERVAL '1 hour'
 		) s
+		WHERE w IS NOT NULL AND w > 0
+		  AND speed_knots > 1 AND speed_knots < 30
+		  AND received_at >= ($1::date)::timestamp AT TIME ZONE 'Europe/Paris'
 		GROUP BY mmsi, day, dir
 	`, fromDay, s.speedLimitKnots); err != nil {
 		return err
@@ -123,16 +129,16 @@ type TrendPoint struct {
 	Days   int    `json:"days"`   // days with data in the period
 	Boats  int    `json:"boats"`
 	// All directions
-	N           int     `json:"n"`
+	N           int     `json:"moving_s"` // seconds moving
 	ShareOver   float64 `json:"share_over"`
 	ShareOver15 float64 `json:"share_over15"`
 	ShareOver20 float64 `json:"share_over20"`
 	AvgKmh      float64 `json:"avg_kmh"`
 	// Downstream / upstream split
-	NDown           int     `json:"n_down"`
+	NDown           int     `json:"moving_s_down"`
 	ShareOverDown   float64 `json:"share_over_down"`
 	ShareOver15Down float64 `json:"share_over15_down"`
-	NUp             int     `json:"n_up"`
+	NUp             int     `json:"moving_s_up"`
 	ShareOverUp     float64 `json:"share_over_up"`
 	ShareOver15Up   float64 `json:"share_over15_up"`
 	// Sustained public infractions
@@ -161,13 +167,13 @@ func (s *Store) trends(ctx context.Context, period, extra string, args ...any) (
 	),
 	agg AS (
 	  SELECT p, COUNT(DISTINCT day) days, COUNT(DISTINCT mmsi) boats,
-	         SUM(n) n, SUM(n_over) n_over, SUM(n_over15) n_over15, SUM(n_over20) n_over20, SUM(sum_kmh) sum_kmh,
-	         SUM(n) FILTER (WHERE dir = 'down') n_down,
-	         SUM(n_over) FILTER (WHERE dir = 'down') n_over_down,
-	         SUM(n_over15) FILTER (WHERE dir = 'down') n_over15_down,
-	         SUM(n) FILTER (WHERE dir = 'up') n_up,
-	         SUM(n_over) FILTER (WHERE dir = 'up') n_over_up,
-	         SUM(n_over15) FILTER (WHERE dir = 'up') n_over15_up
+	         SUM(secs)::bigint n, SUM(secs_over)::bigint n_over, SUM(secs_over15)::bigint n_over15, SUM(secs_over20)::bigint n_over20, SUM(kmh_secs) sum_kmh,
+	         SUM(secs) FILTER (WHERE dir = 'down')::bigint n_down,
+	         SUM(secs_over) FILTER (WHERE dir = 'down')::bigint n_over_down,
+	         SUM(secs_over15) FILTER (WHERE dir = 'down')::bigint n_over15_down,
+	         SUM(secs) FILTER (WHERE dir = 'up')::bigint n_up,
+	         SUM(secs_over) FILTER (WHERE dir = 'up')::bigint n_over_up,
+	         SUM(secs_over15) FILTER (WHERE dir = 'up')::bigint n_over15_up
 	  FROM bd GROUP BY p
 	),
 	inf AS (
@@ -257,13 +263,13 @@ type OperatorBoat struct {
 	LengthM       float64 `json:"length_m,omitempty"`
 	// Last 30 days vs the 30 days before, downstream share >15 km/h and
 	// all-direction share over the limit.
-	N30              int     `json:"n_30d"`
+	N30              int     `json:"moving_s_30d"`
 	ShareOver30      float64 `json:"share_over_30d"`
 	ShareOver15D30   float64 `json:"share_over15_down_30d"`
-	NPrev            int     `json:"n_prev"`
+	NPrev            int     `json:"moving_s_prev"`
 	ShareOverPrev    float64 `json:"share_over_prev"`
 	ShareOver15DPrev float64 `json:"share_over15_down_prev"`
-	NAll             int     `json:"n_all"`
+	NAll             int     `json:"moving_s_all"`
 	ShareOverAll     float64 `json:"share_over_all"`
 }
 
@@ -274,13 +280,13 @@ type Operator struct {
 	Note  string         `json:"note,omitempty"`
 	Boats []OperatorBoat `json:"boats"`
 	// Fleet totals over the same windows as OperatorBoat.
-	N30              int     `json:"n_30d"`
+	N30              int     `json:"moving_s_30d"`
 	ShareOver30      float64 `json:"share_over_30d"`
 	ShareOver15D30   float64 `json:"share_over15_down_30d"`
-	NPrev            int     `json:"n_prev"`
+	NPrev            int     `json:"moving_s_prev"`
 	ShareOverPrev    float64 `json:"share_over_prev"`
 	ShareOver15DPrev float64 `json:"share_over15_down_prev"`
-	NAll             int     `json:"n_all"`
+	NAll             int     `json:"moving_s_all"`
 	ShareOverAll     float64 `json:"share_over_all"`
 	ShareOver15DAll  float64 `json:"share_over15_down_all"`
 }
@@ -292,16 +298,16 @@ func (s *Store) Operators(ctx context.Context) ([]Operator, error) {
 	WITH last AS (SELECT COALESCE(MAX(day), CURRENT_DATE) d FROM boat_days),
 	w AS (
 	  SELECT b.mmsi,
-	    SUM(n) FILTER (WHERE day > last.d - 30) n30,
-	    SUM(n_over) FILTER (WHERE day > last.d - 30) o30,
-	    SUM(n) FILTER (WHERE day > last.d - 30 AND dir = 'down') nd30,
-	    SUM(n_over15) FILTER (WHERE day > last.d - 30 AND dir = 'down') od30,
-	    SUM(n) FILTER (WHERE day <= last.d - 30 AND day > last.d - 60) np,
-	    SUM(n_over) FILTER (WHERE day <= last.d - 30 AND day > last.d - 60) op,
-	    SUM(n) FILTER (WHERE day <= last.d - 30 AND day > last.d - 60 AND dir = 'down') ndp,
-	    SUM(n_over15) FILTER (WHERE day <= last.d - 30 AND day > last.d - 60 AND dir = 'down') odp,
-	    SUM(n) na, SUM(n_over) oa,
-	    SUM(n) FILTER (WHERE dir = 'down') nda, SUM(n_over15) FILTER (WHERE dir = 'down') oda
+	    (SUM(secs) FILTER (WHERE day > last.d - 30))::bigint n30,
+	    (SUM(secs_over) FILTER (WHERE day > last.d - 30))::bigint o30,
+	    (SUM(secs) FILTER (WHERE day > last.d - 30 AND dir = 'down'))::bigint nd30,
+	    (SUM(secs_over15) FILTER (WHERE day > last.d - 30 AND dir = 'down'))::bigint od30,
+	    (SUM(secs) FILTER (WHERE day <= last.d - 30 AND day > last.d - 60))::bigint np,
+	    (SUM(secs_over) FILTER (WHERE day <= last.d - 30 AND day > last.d - 60))::bigint op,
+	    (SUM(secs) FILTER (WHERE day <= last.d - 30 AND day > last.d - 60 AND dir = 'down'))::bigint ndp,
+	    (SUM(secs_over15) FILTER (WHERE day <= last.d - 30 AND day > last.d - 60 AND dir = 'down'))::bigint odp,
+	    (SUM(secs))::bigint na, (SUM(secs_over))::bigint oa,
+	    (SUM(secs) FILTER (WHERE dir = 'down'))::bigint nda, (SUM(secs_over15) FILTER (WHERE dir = 'down'))::bigint oda
 	  FROM boat_days b, last GROUP BY b.mmsi
 	)
 	SELECT o.slug, o.name, o.url, o.note, v.mmsi, COALESCE(NULLIF(v.name, ''), v.mmsi::text),
@@ -392,12 +398,12 @@ func (s *Store) RecentStats(ctx context.Context) (*RecentStats, error) {
 	}
 	var n7, o7, np, op, nd7, od7 int
 	err := s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(n) FILTER (WHERE day > CURRENT_DATE - 7), 0),
-		       COALESCE(SUM(n_over) FILTER (WHERE day > CURRENT_DATE - 7), 0),
-		       COALESCE(SUM(n) FILTER (WHERE day <= CURRENT_DATE - 7), 0),
-		       COALESCE(SUM(n_over) FILTER (WHERE day <= CURRENT_DATE - 7), 0),
-		       COALESCE(SUM(n) FILTER (WHERE day > CURRENT_DATE - 7 AND dir = 'down'), 0),
-		       COALESCE(SUM(n_over15) FILTER (WHERE day > CURRENT_DATE - 7 AND dir = 'down'), 0),
+		SELECT COALESCE(SUM(secs) FILTER (WHERE day > CURRENT_DATE - 7), 0)::bigint,
+		       COALESCE(SUM(secs_over) FILTER (WHERE day > CURRENT_DATE - 7), 0)::bigint,
+		       COALESCE(SUM(secs) FILTER (WHERE day <= CURRENT_DATE - 7), 0)::bigint,
+		       COALESCE(SUM(secs_over) FILTER (WHERE day <= CURRENT_DATE - 7), 0)::bigint,
+		       COALESCE(SUM(secs) FILTER (WHERE day > CURRENT_DATE - 7 AND dir = 'down'), 0)::bigint,
+		       COALESCE(SUM(secs_over15) FILTER (WHERE day > CURRENT_DATE - 7 AND dir = 'down'), 0)::bigint,
 		       COUNT(DISTINCT b.mmsi) FILTER (WHERE day > CURRENT_DATE - 7)
 		FROM boat_days b LEFT JOIN vessels v ON v.mmsi = b.mmsi
 		WHERE day > CURRENT_DATE - 14 AND NOT `+exemptVesselSQL).Scan(&n7, &o7, &np, &op, &nd7, &od7, &r.Boats7d)
@@ -521,7 +527,7 @@ func (s *Store) ExportInfractionsCSV(ctx context.Context, w io.Writer) error {
 func (s *Store) ExportBoatDaysCSV(ctx context.Context, w io.Writer) error {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT b.day, b.mmsi, COALESCE(NULLIF(v.name, ''), ''), `+categorySQL+`, COALESCE(v.operator_slug, ''),
-		       b.dir, b.n, b.n_over, b.n_over15, b.n_over20, round((b.sum_kmh / b.n)::numeric, 2),
+		       b.dir, b.secs::bigint, b.secs_over::bigint, b.secs_over15::bigint, b.secs_over20::bigint, round((b.kmh_secs / b.secs)::numeric, 2),
 		       COALESCE(f.q_m3s, 0)
 		FROM boat_days b LEFT JOIN vessels v ON v.mmsi = b.mmsi LEFT JOIN river_flow f ON f.day = b.day
 		WHERE NOT `+exemptVesselSQL+`
@@ -530,7 +536,7 @@ func (s *Store) ExportBoatDaysCSV(ctx context.Context, w io.Writer) error {
 		return err
 	}
 	defer rows.Close()
-	fmt.Fprintln(w, "day,mmsi,vessel_name,category,operator,direction,samples,samples_over_limit,samples_over_15kmh,samples_over_20kmh,avg_kmh,river_flow_m3s")
+	fmt.Fprintln(w, "day,mmsi,vessel_name,category,operator,direction,moving_s,over_limit_s,over_15kmh_s,over_20kmh_s,avg_kmh,river_flow_m3s")
 	for rows.Next() {
 		var day time.Time
 		var mmsi, n, o, o15, o20 int
@@ -550,4 +556,49 @@ func csvQuote(s string) string {
 		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 	}
 	return s
+}
+
+// ---------------------------------------------------------------------------
+// Monthly report: top boats of a month
+// ---------------------------------------------------------------------------
+
+type MonthBoat struct {
+	MMSI         int     `json:"mmsi"`
+	Name         string  `json:"name"`
+	Category     string  `json:"category"`
+	OperatorSlug string  `json:"operator_slug,omitempty"`
+	OperatorName string  `json:"operator_name,omitempty"`
+	N            int     `json:"moving_s"`
+	ShareOver    float64 `json:"share_over"`
+	ShareOver15  float64 `json:"share_over15"`
+}
+
+// MonthTopBoats ranks boats with at least minSamples moving samples in the
+// month (YYYY-MM) by share of time over the limit.
+func (s *Store) MonthTopBoats(ctx context.Context, month string, minSamples, limit int) ([]MonthBoat, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT b.mmsi, COALESCE(NULLIF(v.name, ''), b.mmsi::text), `+categorySQL+`,
+		       COALESCE(v.operator_slug, ''), COALESCE(op.name, ''),
+		       SUM(b.secs)::bigint, SUM(b.secs_over) / SUM(b.secs), SUM(b.secs_over15) / SUM(b.secs)
+		FROM boat_days b
+		LEFT JOIN vessels v ON v.mmsi = b.mmsi
+		LEFT JOIN operators op ON op.slug = v.operator_slug
+		WHERE to_char(b.day, 'YYYY-MM') = $1 AND NOT `+exemptVesselSQL+`
+		GROUP BY b.mmsi, v.mmsi, op.name
+		HAVING SUM(b.secs) >= $2
+		ORDER BY 7 DESC
+		LIMIT $3`, month, minSamples, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MonthBoat
+	for rows.Next() {
+		var m MonthBoat
+		if err := rows.Scan(&m.MMSI, &m.Name, &m.Category, &m.OperatorSlug, &m.OperatorName, &m.N, &m.ShareOver, &m.ShareOver15); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }

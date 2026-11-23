@@ -78,21 +78,30 @@ CREATE TABLE IF NOT EXISTS operators (
 );
 ALTER TABLE vessels ADD COLUMN IF NOT EXISTS operator_slug TEXT REFERENCES operators(slug);
 
--- boat_days: one row per vessel x Paris-local day x direction, built from a
--- de-duplicated sample (first stored ping per vessel per 5-min clock bucket,
--- moving only: 1 < SOG < 30 kn). Positions are throttled to 1/5 min unless
--- speeding, so this sample puts speeding and non-speeding time on the same
--- footing. dir: 'down' = westward course component (Seine flows E->W through
--- Paris), 'up' otherwise. Refreshed incrementally by RefreshBoatDays.
+-- boat_days: one row per vessel x Paris-local day x direction with the time
+-- (seconds) spent moving (1 < SOG < 30 kn), above the limit, above 15 and
+-- 20 km/h. Each stored ping stands for the interval until the vessel's next
+-- stored ping, capped at 60 s for speeding pings (stored at full AIS rate)
+-- and 330 s for others (throttled to one per 5 min). This time-weighting
+-- avoids over-counting speeding, whose pings are far more numerous.
+-- dir: 'down' = westward course component (Seine flows E->W through Paris),
+-- 'up' otherwise. Refreshed incrementally by RefreshBoatDays.
+-- Pre-release versions of boat_days stored sample counts (column n); the
+-- table is a pure derivative of positions, so drop and rebuild it.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'boat_days' AND column_name = 'n') THEN
+    DROP TABLE boat_days;
+  END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS boat_days (
-    mmsi      INTEGER NOT NULL,
-    day       DATE    NOT NULL,
-    dir       TEXT    NOT NULL,
-    n         INTEGER NOT NULL,
-    n_over    INTEGER NOT NULL,
-    n_over15  INTEGER NOT NULL,
-    n_over20  INTEGER NOT NULL,
-    sum_kmh   DOUBLE PRECISION NOT NULL,
+    mmsi         INTEGER NOT NULL,
+    day          DATE    NOT NULL,
+    dir          TEXT    NOT NULL,
+    secs         DOUBLE PRECISION NOT NULL,
+    secs_over    DOUBLE PRECISION NOT NULL,
+    secs_over15  DOUBLE PRECISION NOT NULL,
+    secs_over20  DOUBLE PRECISION NOT NULL,
+    kmh_secs     DOUBLE PRECISION NOT NULL,
     PRIMARY KEY (mmsi, day, dir)
 );
 CREATE INDEX IF NOT EXISTS idx_boat_days_day ON boat_days(day);

@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -128,6 +129,20 @@ func (s *Server) handleExportBoatDays(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.ExportBoatDaysCSV(r.Context(), w); err != nil {
 		s.logger.Error("export boat days", "error", err)
 	}
+}
+
+var monthRe = regexp.MustCompile(`^\d{4}-(0[1-9]|1[0-2])$`)
+
+func (s *Server) handleMonthBoats(w http.ResponseWriter, r *http.Request) {
+	month := chi.URLParam(r, "month")
+	if !monthRe.MatchString(month) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid month"})
+		return
+	}
+	s.cached(w, "month:"+month, 30*time.Minute, func() (any, error) {
+		b, err := s.store.MonthTopBoats(r.Context(), month, 6*3600, 20)
+		return emptyIfNil(b), err
+	})
 }
 
 var _ = store.SwimSite{}

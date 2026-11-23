@@ -71,6 +71,7 @@ func (s *Server) setupRouter() {
 			r.Get("/operators", s.handleOperators)
 			r.Get("/operators/{slug}/trends", s.handleOperatorTrends)
 			r.Get("/swim-sites", s.handleSwimSites)
+			r.Get("/months/{month}/boats", s.handleMonthBoats)
 		})
 	})
 
