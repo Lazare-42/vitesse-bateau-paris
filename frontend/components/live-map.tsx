@@ -1,9 +1,9 @@
 "use client";
 
+import { BaseTiles } from "./base-tiles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MapContainer,
-  TileLayer,
   CircleMarker,
   useMap,
 } from "react-leaflet";
@@ -354,9 +354,9 @@ export function LiveMap() {
               center={SITE.mapCenter}
               zoom={SITE.mapZoom}
               className="h-[60vh] sm:h-[calc(100vh-12rem)] w-full"
-              attributionControl={false}
+              attributionControl={true}
             >
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+              <BaseTiles />
               <PanOnSelect selected={selected} />
               {Array.from(positions.values()).map((p) => {
                 const b = bucketize(p);
