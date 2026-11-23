@@ -27,7 +27,40 @@ export default async function CompagniesPage() {
       {ops.length === 0 ? (
         <p className="mt-6 text-sm text-muted-foreground">Aucune compagnie référencée pour cette zone.</p>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-lg border">
+        <>
+        <ul className="mt-6 space-y-3 sm:hidden">
+          {ops.map((o) => (
+            <li key={o.slug} className="rounded-lg border p-4">
+              <Link href={`/compagnies/${o.slug}`} className="font-medium hover:underline">
+                {o.name}
+              </Link>
+              <span className="ml-2 text-xs text-muted-foreground">
+                {o.boats.length} bateau{o.boats.length > 1 ? "x" : ""}
+              </span>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs tabular-nums">
+                <div>
+                  <dt className="text-muted-foreground">30 derniers jours</dt>
+                  <dd className="text-lg font-semibold">{o.moving_s_30d ? fmtPct(o.share_over_30d) : "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">vs 30 jours précédents</dt>
+                  <dd className="text-lg">
+                    {o.moving_s_30d && o.moving_s_prev ? fmtDelta(o.share_over_prev, o.share_over_30d) : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Depuis le début</dt>
+                  <dd>{fmtPct(o.share_over_all)}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Descente &gt; 15 km/h</dt>
+                  <dd>{fmtPct(o.share_over15_down_all)}</dd>
+                </div>
+              </dl>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-6 hidden overflow-x-auto rounded-lg border sm:block">
           <table className="w-full text-sm">
             <thead className="bg-secondary text-xs text-muted-foreground dark:bg-input/30">
               <tr className="text-right">
@@ -60,6 +93,7 @@ export default async function CompagniesPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <div className="mt-6 space-y-2 text-xs leading-relaxed text-muted-foreground">
