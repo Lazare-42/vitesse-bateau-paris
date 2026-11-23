@@ -18,6 +18,11 @@ export default async function EvolutionPage() {
   const full = weeks.filter((t) => complete(t));
   const first = full.slice(0, 4);
   const last = full.slice(-4);
+  // Weeks blanked for lack of data, between the first and last complete week
+  // (AIS reception outages), listed so readers don't wonder why the line breaks.
+  const firstFull = full[0]?.period ?? "";
+  const lastFull = full[full.length - 1]?.period ?? "";
+  const gaps = weeks.filter((t) => !complete(t) && t.period > firstFull && t.period < lastFull);
   const hasFlow = weeks.some((t) => t.flow_m3s > 0);
   const marker = SITE.launchDate ? { x: SITE.launchDate, label: "mise en ligne" } : undefined;
 
@@ -38,6 +43,12 @@ export default async function EvolutionPage() {
         un nombre d&apos;excès, qui dépend surtout du trafic). Les semaines avec
         moins de 4 jours de données sont laissées en blanc.
       </p>
+      {gaps.length > 0 && (
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          Interruptions de la réception AIS (semaines non affichées) :{" "}
+          {gaps.map((t) => fmtPeriod(t.period, "week")).join(", ")}.
+        </p>
+      )}
 
       {full.length >= 8 && (
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -104,14 +115,15 @@ export default async function EvolutionPage() {
         </Section>
       )}
 
-      <Section title="Excès soutenus (30 s et plus) par semaine">
+      <Section title="Excès soutenus (30 s et plus) par jour, moyenne de la semaine">
         <LineChart
-          ariaLabel="Nombre d'excès soutenus par semaine"
+          ariaLabel="Nombre moyen d'excès soutenus par jour, par semaine"
           format={(v) => Math.round(v).toLocaleString("fr-FR")}
           marker={marker}
-          series={[{ label: "Excès", color: "var(--series-1)", points: seriesOf(weeks, (t) => t.infractions) }]}
+          series={[{ label: "Excès par jour", color: "var(--series-1)", points: seriesOf(weeks, (t) => t.infractions / Math.max(t.days, 1)) }]}
         />
         <p className="mt-2 text-xs text-muted-foreground">
+          Moyenne par jour de données, pour que les semaines incomplètes restent comparables.
           Le nombre brut d&apos;excès suit surtout le trafic (saison, météo) : préférez la part du temps ci-dessus.
         </p>
       </Section>

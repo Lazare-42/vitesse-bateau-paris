@@ -21,7 +21,7 @@ interface Props {
   ariaLabel: string;
 }
 
-const PAD = { top: 12, right: 12, bottom: 28, left: 48 };
+const PAD_BASE = { top: 12, right: 12, bottom: 28 };
 const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
 function t(x: string) {
@@ -76,12 +76,14 @@ function Chart({ series, format, yMax, height = 220, marker, ariaLabel, W, compa
   const x0 = Math.min(...xs);
   const x1 = Math.max(...xs, x0 + 86400000);
   const ymax = yMax ?? niceMax(Math.max(...all.map((p) => p.y as number)) * 1.02);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * ymax);
+  // Left padding fits the longest y label (≈6.2 px per char at 11 px).
+  const PAD = { ...PAD_BASE, left: Math.max(36, Math.ceil(Math.max(...ticks.map((v) => format(v).length)) * 6.2) + 10) };
   const H = height;
   const iw = W - PAD.left - PAD.right;
   const ih = H - PAD.top - PAD.bottom;
   const sx = (x: string) => PAD.left + ((t(x) - x0) / (x1 - x0)) * iw;
   const sy = (y: number) => PAD.top + ih - (Math.min(y, ymax) / ymax) * ih;
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * ymax);
 
   // Month ticks
   const monthTicks: { x: number; label: string }[] = [];
