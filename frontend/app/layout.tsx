@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import Link from "next/link";
+import { JsonLd } from "@/components/json-ld";
 import { Nav } from "@/components/nav";
 import { PageTracker } from "@/components/page-tracker";
 import { SITE, SPEED_LIMIT_KNOTS } from "@/site.config";
@@ -114,10 +115,7 @@ export default function RootLayout({
       <body
         className={`${sofiaSans.variable} font-sans flex min-h-screen flex-col antialiased`}
       >
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        <JsonLd data={jsonLd} />
         <Nav />
         <PageTracker />
 
