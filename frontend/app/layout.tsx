@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { SITE, SPEED_LIMIT_KNOTS } from "@/site.config";
 import "./globals.css";
@@ -122,6 +123,12 @@ export default function RootLayout({
 
         <footer className="border-t border-input mt-12">
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+            <p className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <Link href="/bilan" className="hover:text-foreground">Bilans mensuels</Link>
+              <Link href="/baignade" className="hover:text-foreground">Baignade</Link>
+              <Link href="/a-propos#donnees" className="hover:text-foreground">Données ouvertes</Link>
+              <Link href="/a-propos#droit-de-reponse" className="hover:text-foreground">Droit de réponse</Link>
+            </p>
             <p className="text-xs text-muted-foreground">
               Créé par Lazare Rossillon, contact à{" "}
               <a

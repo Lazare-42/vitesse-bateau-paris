@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
-import { getOffenders } from "@/lib/api";
+import { getOffenders, getOperators, getTrends } from "@/lib/api";
+import { monthKey, publishableMonths } from "@/lib/months";
 import { SITE } from "@/site.config";
 
 // Split into sub-sitemaps. Next.js serves a sitemap index at /sitemap.xml that
@@ -21,6 +22,10 @@ const CORE: {
 }[] = [
   { path: "/", changeFrequency: "hourly", priority: 1.0 },
   { path: "/direct", changeFrequency: "always", priority: 0.9 },
+  { path: "/evolution", changeFrequency: "daily", priority: 0.9 },
+  { path: "/compagnies", changeFrequency: "daily", priority: 0.8 },
+  { path: "/bilan", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/baignade", changeFrequency: "weekly", priority: 0.6 },
   { path: "/exces", changeFrequency: "hourly", priority: 0.9 },
   { path: "/plus-rapides", changeFrequency: "daily", priority: 0.8 },
   { path: "/carte", changeFrequency: "hourly", priority: 0.8 },
@@ -51,10 +56,24 @@ export default async function sitemap({
   }
 
   const now = new Date();
-  return CORE.map((r) => ({
-    url: `${SITE.url}${r.path}`,
-    lastModified: now,
-    changeFrequency: r.changeFrequency,
-    priority: r.priority,
-  }));
+  const [operators, months] = await Promise.all([getOperators(), getTrends("month")]);
+  return [
+    ...CORE.map((r) => ({
+      url: `${SITE.url}${r.path}`,
+      lastModified: now,
+      changeFrequency: r.changeFrequency,
+      priority: r.priority,
+    })),
+    ...operators.map((o) => ({
+      url: `${SITE.url}/compagnies/${o.slug}`,
+      lastModified: now,
+      changeFrequency: "daily" as const,
+      priority: 0.7,
+    })),
+    ...publishableMonths(months).map((m) => ({
+      url: `${SITE.url}/bilan/${monthKey(m.period)}`,
+      changeFrequency: "yearly" as const,
+      priority: 0.5,
+    })),
+  ];
 }

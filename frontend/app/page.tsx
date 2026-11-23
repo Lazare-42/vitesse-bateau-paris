@@ -3,6 +3,8 @@ import { Stats } from "@/components/stats";
 import { type FastestEver } from "@/components/fastest-table";
 import { MethodologyNote } from "@/components/methodology-note";
 import { HomeTabs } from "@/components/home-tabs";
+import { Headline } from "@/components/headline";
+import { getRecentStats } from "@/lib/api";
 import { SITE, SPEED_LIMIT_KNOTS } from "@/site.config";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +49,7 @@ async function getOffenders() {
 
 async function getInfractions() {
   try {
-    const res = await fetch(`${API_URL}/api/infractions?since_hours=24&limit=2000`, {
+    const res = await fetch(`${API_URL}/api/infractions?since_hours=24&limit=500`, {
       next: { revalidate: 30 },
     });
     if (!res.ok) return [];
@@ -70,11 +72,12 @@ async function getFastest(): Promise<FastestEver[]> {
 }
 
 export default async function Home() {
-  const [stats, offenders, infractions, fastest] = await Promise.all([
+  const [stats, offenders, infractions, fastest, recent] = await Promise.all([
     getStats(),
     getOffenders(),
     getInfractions(),
     getFastest(),
+    getRecentStats(),
   ]);
 
   return (
@@ -83,10 +86,12 @@ export default async function Home() {
         <h1 className="text-2xl font-bold tracking-tight">{SITE.name}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Suivi en temps réel des excès de vitesse sur la {SITE.river} &mdash;
-          limite : {SPEED_LIMIT_KNOTS.toFixed(1)} nœuds (~{SITE.speedLimitKmh}{" "}
-          km/h)
+          limite : {SITE.speedLimitKmh} km/h ({SPEED_LIMIT_KNOTS.toFixed(1)}{" "}
+          nœuds)
         </p>
       </div>
+
+      {recent && <Headline r={recent} />}
 
       <MethodologyNote />
 

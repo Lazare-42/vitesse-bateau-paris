@@ -28,6 +28,9 @@
   --color-speed-danger: var(--speed-danger);
   --color-speed-warning: var(--speed-warning);
   --color-speed-ok: var(--speed-ok);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
 }
 
 :root {
@@ -52,6 +55,11 @@
   --speed-danger: oklch(0.577 0.245 27.325);
   --speed-warning: oklch(0.828 0.189 84.429);
   --speed-ok: oklch(0.6 0.118 184.704);
+
+  /* Chart series (validated categorical slots: blue, orange, aqua). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
 }
 
 .dark {
@@ -75,6 +83,10 @@
   --speed-danger: oklch(0.704 0.191 22.216);
   --speed-warning: oklch(0.828 0.189 84.429);
   --speed-ok: oklch(0.696 0.17 162.48);
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
 }
 
 @layer base {
@@ -93,4 +105,12 @@
 @keyframes vitesse-ping {
   0% { transform: scale(1); opacity: 0.75; }
   100% { transform: scale(2); opacity: 0; }
+}
+
+/* Darkened OpenStreetMap basemap (see components/base-tiles.tsx). */
+.tiles-dark {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.85) saturate(0.4);
+}
+.leaflet-control-attribution {
+  font-size: 10px;
 }

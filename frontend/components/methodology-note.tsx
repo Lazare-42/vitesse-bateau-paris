@@ -5,7 +5,9 @@ export function MethodologyNote() {
       soutenus pendant au moins 30 secondes sont comptabilisés, pour écarter
       les sauts du signal GPS sous les ponts. Les bateaux qui dépassent
       brièvement la limite sur une seule mesure n&apos;apparaissent pas dans
-      les statistiques.
+      les statistiques. Les bateaux de police, de secours et militaires, ainsi
+      que les vitesses physiquement impossibles (relevés GPS aberrants), sont
+      exclus.
     </p>
   );
 }

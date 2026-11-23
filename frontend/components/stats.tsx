@@ -21,11 +21,11 @@ export function Stats({ data }: { data: StatsData }) {
       value: data.total_vessels_tracked.toLocaleString("fr-FR"),
     },
     {
-      label: "Excès",
+      label: "Excès (depuis le début)",
       value: data.total_infractions.toLocaleString("fr-FR"),
     },
     {
-      label: `Rois ${SITE.riverWithArticle}`,
+      label: "Bateaux déjà en excès",
       value: data.unique_offenders.toLocaleString("fr-FR"),
     },
     {

@@ -8,9 +8,14 @@ import { BoatTrajetMapWrapper } from "@/components/boat-trajet-map-wrapper";
 import {
   getOffenders,
   getOffenderDetail,
+  getVesselTrends,
+  getTrends,
   vesselSpecs,
   isPassengerVessel,
+  CATEGORY_SHORT,
 } from "@/lib/api";
+import { LineChart, pct } from "@/components/line-chart";
+import { seriesOf } from "@/lib/trends";
 import {
   fmtKmh,
   fmtDate,
@@ -61,8 +66,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function BateauPage({ params }: Params) {
   const { mmsi } = await params;
-  const data = await getOffenderDetail(mmsi);
+  const [data, trends, fleet] = await Promise.all([
+    getOffenderDetail(mmsi),
+    getVesselTrends(mmsi, "month"),
+    getTrends("month"),
+  ]);
   if (!data) notFound();
+  const marker = SITE.launchDate ? { x: SITE.launchDate, label: "mise en ligne" } : undefined;
 
   const o = data.offender;
   const name = o.vessel_name || `MMSI ${o.mmsi}`;
@@ -140,6 +150,21 @@ export default async function BateauPage({ params }: Params) {
                 {specs.join(" · ")}
               </p>
             )}
+            <p className="mt-1.5 flex flex-wrap gap-2 text-xs">
+              {o.category && (
+                <span className="rounded border px-1.5 py-0.5 text-muted-foreground">
+                  {CATEGORY_SHORT[o.category]}
+                </span>
+              )}
+              {o.operator_slug && (
+                <Link
+                  href={`/compagnies/${o.operator_slug}`}
+                  className="rounded border px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
+                >
+                  {o.operator_name}
+                </Link>
+              )}
+            </p>
           </div>
         </div>
         <CarteLink href={`/carte?bateau=${o.mmsi}`} />
@@ -172,8 +197,33 @@ export default async function BateauPage({ params }: Params) {
         <Stat label="Vitesse max" value={`${fmtKmh(o.max_speed_knots)} km/h`} danger />
         <Stat label="Nb. excès" value={String(o.infraction_count)} />
         <Stat label="Temps en excès" value={fmtLongDuration(o.total_excess_seconds)} />
-        <Stat label="% du temps en excès" value={fmtPercent(o.excess_time_ratio)} />
+        <Stat label="% du temps en excès (à quai compris)" value={fmtPercent(o.excess_time_ratio)} />
       </div>
+
+      {/* Month-by-month trend vs the whole fleet */}
+      {trends.filter((t) => t.days >= 10).length >= 2 && (
+        <>
+          <h2 className="mt-10 mb-3 text-lg font-semibold">
+            Mois par mois
+          </h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Part du temps de navigation de {name} au-dessus de{" "}
+            {SITE.speedLimitKmh} km/h, et au-dessus de 15 km/h en descente,
+            comparée à l&apos;ensemble des bateaux.
+            Les mois avec moins de 10 jours de présence sont laissés en blanc.
+          </p>
+          <LineChart
+            ariaLabel={`Part du temps au-dessus de la limite, ${name}, par mois`}
+            format={pct}
+            marker={marker}
+            series={[
+              { label: `${name} — > ${SITE.speedLimitKmh} km/h`, color: "var(--series-1)", points: seriesOf(trends, (t) => t.share_over, "month") },
+              { label: `${name} — descente > 15 km/h`, color: "var(--series-2)", points: seriesOf(trends, (t) => t.share_over15_down, "month") },
+              { label: "Tous les bateaux", color: "var(--series-3)", points: seriesOf(fleet, (t) => t.share_over, "month"), dashed: true },
+            ]}
+          />
+        </>
+      )}
 
       {/* Trajets — each excès drawn as a segment on the river */}
       {infractions.length > 0 && (

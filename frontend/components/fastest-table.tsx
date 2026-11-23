@@ -7,6 +7,7 @@ export interface FastestEver {
   mmsi: number;
   vessel_name: string;
   photo_thumb_url?: string;
+  category?: "passagers" | "petits" | "fret" | "autres";
   max_speed_knots: number;
   avg_speed_knots: number;
   speed_limit_knots: number;
