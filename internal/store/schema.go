@@ -106,6 +106,18 @@ CREATE TABLE IF NOT EXISTS boat_days (
 );
 CREATE INDEX IF NOT EXISTS idx_boat_days_day ON boat_days(day);
 
+-- Cookieless audience measurement: daily page-view counts per path,
+-- referring host and device class. No IP, no user agent, no identifier is
+-- stored, so no visitor can be singled out.
+CREATE TABLE IF NOT EXISTS page_views (
+    day      DATE    NOT NULL,
+    path     TEXT    NOT NULL,
+    referrer TEXT    NOT NULL DEFAULT '',
+    device   TEXT    NOT NULL DEFAULT '',
+    views    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, path, referrer, device)
+);
+
 -- Daily mean river flow (m3/s) from Hub'Eau, station configured in
 -- [river] hubeau_station. Used to put downstream speeds in context.
 CREATE TABLE IF NOT EXISTS river_flow (

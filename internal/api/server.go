@@ -53,6 +53,8 @@ func (s *Server) setupRouter() {
 	r.Use(corsMiddleware)
 
 	r.Get("/health", s.handleHealth)
+	// Local-only audience summary (see hits.go); not under /api on purpose.
+	r.Get("/admin/traffic", s.handleTraffic)
 
 	// REST endpoints: 30 s request timeout.
 	r.Group(func(r chi.Router) {
@@ -72,6 +74,7 @@ func (s *Server) setupRouter() {
 			r.Get("/operators/{slug}/trends", s.handleOperatorTrends)
 			r.Get("/swim-sites", s.handleSwimSites)
 			r.Get("/months/{month}/boats", s.handleMonthBoats)
+			r.Post("/hit", s.handleHit)
 		})
 	})
 
@@ -117,7 +120,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		if r.Method == "OPTIONS" {

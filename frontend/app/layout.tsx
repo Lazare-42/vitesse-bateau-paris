@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import Link from "next/link";
 import { Nav } from "@/components/nav";
+import { PageTracker } from "@/components/page-tracker";
 import { SITE, SPEED_LIMIT_KNOTS } from "@/site.config";
 import "./globals.css";
 
@@ -118,6 +119,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         <Nav />
+        <PageTracker />
 
         <div className="flex-1">{children}</div>
 

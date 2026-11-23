@@ -282,6 +282,20 @@ export default function AProposPage() {
           </ul>
         </section>
 
+        <section id="audience">
+          <h2 className="mb-2 text-base font-semibold text-foreground">
+            Mesure d&apos;audience
+          </h2>
+          <p>
+            Le site compte ses visites sans cookie ni service tiers : à chaque
+            page vue, seuls l&apos;adresse de la page, le site d&apos;où vous
+            venez (son nom de domaine) et le type d&apos;appareil (mobile ou
+            ordinateur) sont ajoutés à un compteur journalier. Aucune adresse
+            IP ni aucun identifiant n&apos;est conservé, et le réglage « Do Not
+            Track » de votre navigateur est respecté.
+          </p>
+        </section>
+
         <section id="droit-de-reponse">
           <h2 className="mb-2 text-base font-semibold text-foreground">
             Droit de réponse et corrections
