@@ -29,7 +29,7 @@ func (s *Server) handleHit(w http.ResponseWriter, r *http.Request) {
 	defer w.WriteHeader(http.StatusNoContent)
 
 	ua := r.Header.Get("User-Agent")
-	if ua == "" || botRe.MatchString(ua) {
+	if ua == "" || botRe.MatchString(ua) || r.Header.Get("DNT") == "1" || r.Header.Get("Sec-Fetch-Site") == "cross-site" {
 		return
 	}
 	var body struct {
@@ -46,13 +46,7 @@ func (s *Server) handleHit(w http.ResponseWriter, r *http.Request) {
 	if len(path) == 0 || len(path) > 200 || !pathRe.MatchString(path) {
 		return
 	}
-	ref := ""
-	if u, err := url.Parse(body.R); err == nil && u.Hostname() != "" {
-		ref = strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
-		if len(ref) > 100 || ref == r.Host || strings.HasSuffix(ref, "vitessebateauparis.com") {
-			ref = "" // internal navigation
-		}
-	}
+	ref := referrerHost(body.R, r.Host)
 	device := "desktop"
 	if strings.Contains(ua, "Mobi") {
 		device = "mobile"
@@ -62,20 +56,38 @@ func (s *Server) handleHit(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Accept existing clients that send a full URL, retaining only external hostnames.
+func referrerHost(raw, requestHost string) string {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return ""
+	}
+	normalize := func(host string) string {
+		return strings.TrimPrefix(strings.ToLower(strings.TrimSuffix(host, ".")), "www.")
+	}
+	ref := normalize(u.Hostname())
+	site := normalize((&url.URL{Host: requestHost}).Hostname())
+	if len(ref) > 100 || net.ParseIP(ref) != nil || ref == site ||
+		ref == "vitessebateauparis.com" || strings.HasSuffix(ref, ".vitessebateauparis.com") {
+		return ""
+	}
+	return ref
+}
+
 // handleTraffic prints a plain-text audience summary. It is mounted outside
 // /api (so the Next.js rewrite never exposes it) and only answers loopback
 // clients: `curl localhost:8092/admin/traffic?days=30`.
 func (s *Server) handleTraffic(w http.ResponseWriter, r *http.Request) {
-	// chi's RealIP middleware rewrites RemoteAddr from these headers, so a
-	// request carrying any of them is treated as proxied and refused.
-	for _, h := range []string{"X-Forwarded-For", "X-Real-IP", "True-Client-IP"} {
+	// Only direct loopback requests may read this report.
+	for _, h := range []string{"Forwarded", "X-Forwarded-For", "X-Real-IP", "True-Client-IP", "Origin"} {
 		if r.Header.Get(h) != "" {
 			http.NotFound(w, r)
 			return
 		}
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+	target := (&url.URL{Host: r.Host}).Hostname()
+	if !net.ParseIP(host).IsLoopback() || !(strings.EqualFold(target, "localhost") || net.ParseIP(target).IsLoopback()) {
 		http.NotFound(w, r)
 		return
 	}

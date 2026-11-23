@@ -2,7 +2,7 @@ package store
 
 import (
 	"context"
-	"time"
+	"database/sql"
 )
 
 // RecordView increments today's (Paris time) counter for a page view.
@@ -32,14 +32,19 @@ type Traffic struct {
 // Traffic summarises page views over the last `days` days.
 func (s *Store) Traffic(ctx context.Context, days int) (*Traffic, error) {
 	t := &Traffic{Days: days}
-	since := time.Now().AddDate(0, 0, -days+1).Format("2006-01-02")
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	const window = ` FROM page_views WHERE day >= (NOW() AT TIME ZONE 'Europe/Paris')::date - ($1::int - 1)`
 	q := func(sql string) ([]CountRow, error) {
-		rows, err := s.db.QueryContext(ctx, sql, since)
+		rows, err := tx.QueryContext(ctx, sql, days)
 		if err != nil {
 			return nil, err
 		}
 		defer rows.Close()
-		var out []CountRow
+		out := []CountRow{}
 		for rows.Next() {
 			var r CountRow
 			if err := rows.Scan(&r.Key, &r.Views); err != nil {
@@ -49,20 +54,18 @@ func (s *Store) Traffic(ctx context.Context, days int) (*Traffic, error) {
 		}
 		return out, rows.Err()
 	}
-	if err := s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(views), 0), COALESCE(SUM(views) FILTER (WHERE device = 'mobile'), 0)
-		FROM page_views WHERE day >= $1`, since).Scan(&t.Total, &t.Mobile); err != nil {
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(views), 0), COALESCE(SUM(views) FILTER (WHERE device = 'mobile'), 0)`+window, days).Scan(&t.Total, &t.Mobile); err != nil {
 		return nil, err
 	}
-	var err error
-	if t.PerDay, err = q(`SELECT to_char(day, 'YYYY-MM-DD'), SUM(views)::int FROM page_views WHERE day >= $1 GROUP BY day ORDER BY day`); err != nil {
+	if t.PerDay, err = q(`SELECT to_char(day, 'YYYY-MM-DD'), SUM(views)` + window + ` GROUP BY day ORDER BY day`); err != nil {
 		return nil, err
 	}
-	if t.Pages, err = q(`SELECT path, SUM(views)::int v FROM page_views WHERE day >= $1 GROUP BY path ORDER BY v DESC LIMIT 30`); err != nil {
+	if t.Pages, err = q(`SELECT path, SUM(views) v` + window + ` GROUP BY path ORDER BY v DESC, path LIMIT 30`); err != nil {
 		return nil, err
 	}
-	if t.Referrers, err = q(`SELECT referrer, SUM(views)::int v FROM page_views WHERE day >= $1 AND referrer <> '' GROUP BY referrer ORDER BY v DESC LIMIT 20`); err != nil {
+	if t.Referrers, err = q(`SELECT referrer, SUM(views) v` + window + ` AND referrer <> '' GROUP BY referrer ORDER BY v DESC, referrer LIMIT 20`); err != nil {
 		return nil, err
 	}
-	return t, nil
+	return t, tx.Commit()
 }
