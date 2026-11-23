@@ -1,15 +1,16 @@
 "use client";
 
+import { BaseTiles } from "./base-tiles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MapContainer,
-  TileLayer,
   CircleMarker,
   useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { SITE, SPEED_LIMIT_KNOTS, BASE_PATH } from "@/site.config";
 import { CruisingList, type LivePosition } from "./cruising-list";
+import { BoatThumb } from "./boat-thumb";
 
 function knotsToKmh(n: number): string {
   return (n * 1.852).toFixed(1);
@@ -100,6 +101,13 @@ export function LiveMap() {
   function applyOne(p: LivePosition) {
     setPositions((prev) => {
       const next = new Map(prev);
+      // WS position pushes carry no photo (the ingester doesn't look one up);
+      // carry forward the thumbnail from the /api/live snapshot so markers
+      // and the card keep their picture between snapshots.
+      const existing = prev.get(p.mmsi);
+      if (!p.photo_thumb_url && existing?.photo_thumb_url) {
+        p = { ...p, photo_thumb_url: existing.photo_thumb_url };
+      }
       next.set(p.mmsi, p);
       return next;
     });
@@ -346,9 +354,9 @@ export function LiveMap() {
               center={SITE.mapCenter}
               zoom={SITE.mapZoom}
               className="h-[60vh] sm:h-[calc(100vh-12rem)] w-full"
-              attributionControl={false}
+              attributionControl={true}
             >
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+              <BaseTiles />
               <PanOnSelect selected={selected} />
               {Array.from(positions.values()).map((p) => {
                 const b = bucketize(p);
@@ -406,13 +414,20 @@ function SelectedCard({
   return (
     <div className="absolute top-3 right-3 z-[400] w-64 rounded-lg border bg-card/95 backdrop-blur shadow-lg">
       <div className="flex items-start justify-between gap-2 px-3 pt-2.5 pb-1">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold truncate">
-            {p.vessel_name || "Inconnu"}
-          </p>
-          <p className="text-[10px] text-muted-foreground font-mono">
-            MMSI {p.mmsi}
-          </p>
+        <div className="flex items-start gap-2 min-w-0">
+          <BoatThumb
+            src={p.photo_thumb_url}
+            alt={p.vessel_name || `MMSI ${p.mmsi}`}
+            size={40}
+          />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate">
+              {p.vessel_name || "Inconnu"}
+            </p>
+            <p className="text-[10px] text-muted-foreground font-mono">
+              MMSI {p.mmsi}
+            </p>
+          </div>
         </div>
         <button
           type="button"

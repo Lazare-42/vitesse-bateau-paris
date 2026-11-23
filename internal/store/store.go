@@ -15,6 +15,44 @@ import (
 // disrupted) do not count as real speeding events. Tables must be aliased `i`.
 const sustainedFilter = `(i.ended_at - i.started_at) >= INTERVAL '30 seconds'`
 
+// exemptVesselSQL is true for vessels that are exempt from the speed limit or
+// must not be ranked publicly: manual flag, or AIS/registry types for
+// military, law-enforcement and search-and-rescue craft. Requires vessels
+// aliased `v` (LEFT JOIN safe).
+const exemptVesselSQL = `(COALESCE(v.exempt, FALSE)
+  OR COALESCE(v.ship_type, 0) IN (35, 51, 55)
+  OR COALESCE(v.type_text, '') IN ('Military ops', 'SAR', 'Law enforcement'))`
+
+// implausibleSQL flags speed readings that are physically implausible for the
+// hull: a displacement boat of 20 m or more does not do 30 km/h on the Seine
+// in Paris. These are AIS/GPS glitches, not records. Requires `i` and `v`.
+const implausibleSQL = `(COALESCE(v.length_m, 0) >= 20 AND i.max_speed_knots > 16.2)`
+
+// categorySQL buckets vessels so rankings compare like with like.
+//
+//	passagers: passenger boats of 20 m+ (bateaux-mouches, vedettes, Batobus)
+//	petits:    boats under 20 m (private hire, pleasure, RIBs)
+//	fret:      cargo, tankers, tugs, dredgers
+//	autres:    everything else / unknown
+const categorySQL = `(CASE
+  WHEN COALESCE(v.ship_type, 0) BETWEEN 70 AND 89 OR COALESCE(v.ship_type, 0) IN (31, 32, 33, 52)
+       OR COALESCE(v.type_text, '') ~* '^(cargo|tanker|tug|dredging)' THEN 'fret'
+  WHEN COALESCE(v.length_m, 0) > 0 AND v.length_m < 20 THEN 'petits'
+  WHEN v.length_m >= 20 AND (v.ship_type BETWEEN 60 AND 69 OR v.type_text ~* '^passenger') THEN 'passagers'
+  ELSE 'autres' END)`
+
+// publicFilter is the WHERE fragment for every infraction shown or counted
+// publicly: sustained, not an exempt vessel, not an implausible reading, and
+// (when configured) starting inside the legal zone where the limit applies.
+// Requires `i` and `v` (vessels LEFT JOINed).
+func (s *Store) publicFilter() string {
+	f := sustainedFilter + ` AND NOT ` + exemptVesselSQL + ` AND NOT ` + implausibleSQL
+	if z := s.legalZone; z != [4]float64{} {
+		f += fmt.Sprintf(` AND i.start_lat BETWEEN %f AND %f AND i.start_lon BETWEEN %f AND %f`, z[0], z[2], z[1], z[3])
+	}
+	return f
+}
+
 // presenceCTE computes per-vessel total time-in-zone (seconds) by summing
 // gaps between consecutive position pings. Gaps over 15 min are treated as
 // the vessel leaving the zone and are excluded. Subsample of 1 ping per 5 min
@@ -35,15 +73,49 @@ presence AS (
 
 type Store struct {
 	db *sql.DB
+	// legalZone [sw_lat, sw_lon, ne_lat, ne_lon]; zero value = no clipping.
+	legalZone [4]float64
+	// speedLimitKnots is the limit used for boat_days.n_over.
+	speedLimitKnots float64
 }
 
+// SetSpeedLimit sets the limit (knots) used when aggregating boat_days.
+func (s *Store) SetSpeedLimit(knots float64) { s.speedLimitKnots = knots }
+
+// SetLegalZone restricts public infraction queries to infractions starting
+// inside the given box (the area where the speed limit legally applies).
+func (s *Store) SetLegalZone(z [4]float64) { s.legalZone = z }
+
 type Vessel struct {
-	MMSI      int       `json:"mmsi"`
-	Name      string    `json:"name"`
-	CallSign  string    `json:"call_sign,omitempty"`
-	ShipType  int       `json:"ship_type,omitempty"`
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
+	MMSI          int        `json:"mmsi"`
+	Name          string     `json:"name"`
+	CallSign      string     `json:"call_sign,omitempty"`
+	ShipType      int        `json:"ship_type,omitempty"`
+	PhotoURL      string     `json:"photo_url,omitempty"`
+	PhotoThumbURL string     `json:"photo_thumb_url,omitempty"`
+	ENI           int64      `json:"eni,omitempty"`
+	Flag          string     `json:"flag,omitempty"`
+	TypeText      string     `json:"type_text,omitempty"`
+	LengthM       float64    `json:"length_m,omitempty"`
+	BeamM         float64    `json:"beam_m,omitempty"`
+	FirstSeen     time.Time  `json:"first_seen"`
+	LastSeen      time.Time  `json:"last_seen"`
+	EnrichedAt    *time.Time `json:"enriched_at,omitempty"`
+}
+
+// Enrichment is the set of vessel metadata fetched from an external source
+// (currently the VesselFinder click API). Empty fields are left untouched by
+// UpdateVesselEnrichment so a later partial lookup never wipes good data.
+type Enrichment struct {
+	Name          string
+	CallSign      string
+	PhotoURL      string
+	PhotoThumbURL string
+	ENI           int64
+	Flag          string
+	TypeText      string
+	LengthM       float64
+	BeamM         float64
 }
 
 type Position struct {
@@ -51,7 +123,7 @@ type Position struct {
 	MMSI       int       `json:"mmsi"`
 	Latitude   float64   `json:"latitude"`
 	Longitude  float64   `json:"longitude"`
-	SpeedKnots float64  `json:"speed_knots"`
+	SpeedKnots float64   `json:"speed_knots"`
 	Course     float64   `json:"course"`
 	Heading    int       `json:"heading"`
 	ReceivedAt time.Time `json:"received_at"`
@@ -76,6 +148,16 @@ type Infraction struct {
 type Offender struct {
 	MMSI                      int       `json:"mmsi"`
 	VesselName                string    `json:"vessel_name"`
+	PhotoThumbURL             string    `json:"photo_thumb_url,omitempty"`
+	PhotoURL                  string    `json:"photo_url,omitempty"`
+	Flag                      string    `json:"flag,omitempty"`
+	TypeText                  string    `json:"type_text,omitempty"`
+	LengthM                   float64   `json:"length_m,omitempty"`
+	BeamM                     float64   `json:"beam_m,omitempty"`
+	ENI                       int64     `json:"eni,omitempty"`
+	Category                  string    `json:"category"`
+	OperatorSlug              string    `json:"operator_slug,omitempty"`
+	OperatorName              string    `json:"operator_name,omitempty"`
 	InfractionCount           int       `json:"infraction_count"`
 	MaxSpeedKnots             float64   `json:"max_speed_knots"`
 	AvgSpeedKnots             float64   `json:"avg_speed_knots"`
@@ -94,13 +176,14 @@ type Offender struct {
 
 // LivePosition is the latest position of a vessel for the real-time map.
 type LivePosition struct {
-	MMSI       int       `json:"mmsi"`
-	VesselName string    `json:"vessel_name"`
-	Latitude   float64   `json:"latitude"`
-	Longitude  float64   `json:"longitude"`
-	SpeedKnots float64   `json:"speed_knots"`
-	Course     float64   `json:"course"`
-	ReceivedAt time.Time `json:"received_at"`
+	MMSI          int       `json:"mmsi"`
+	VesselName    string    `json:"vessel_name"`
+	PhotoThumbURL string    `json:"photo_thumb_url,omitempty"`
+	Latitude      float64   `json:"latitude"`
+	Longitude     float64   `json:"longitude"`
+	SpeedKnots    float64   `json:"speed_knots"`
+	Course        float64   `json:"course"`
+	ReceivedAt    time.Time `json:"received_at"`
 }
 
 type Stats struct {
@@ -117,6 +200,8 @@ type VesselSpeedRow struct {
 	InfractionID    int64     `json:"infraction_id"`
 	MMSI            int       `json:"mmsi"`
 	VesselName      string    `json:"vessel_name"`
+	PhotoThumbURL   string    `json:"photo_thumb_url,omitempty"`
+	Category        string    `json:"category"`
 	MaxSpeedKnots   float64   `json:"max_speed_knots"`
 	AvgSpeedKnots   float64   `json:"avg_speed_knots"`
 	SpeedLimitKnots float64   `json:"speed_limit_knots"`
@@ -142,7 +227,7 @@ func New(databaseURL string) (*Store, error) {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 
-	return &Store{db: db}, nil
+	return &Store{db: db, speedLimitKnots: 6.5}, nil
 }
 
 func (s *Store) Close() error {
@@ -190,6 +275,10 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		WITH `+presenceCTE+`
 		SELECT i.mmsi,
 		       COALESCE(NULLIF(v.name, ''), MAX(i.vessel_name), '') as vessel_name,
+		       COALESCE(v.photo_thumb_url, '') as photo_thumb_url,
+		       `+categorySQL+` as category,
+		       COALESCE(v.operator_slug, '') as operator_slug,
+		       COALESCE(op.name, '') as operator_name,
 		       COUNT(*) as infraction_count,
 		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
 		       MAX(i.ended_at) as last_infraction,
@@ -204,12 +293,13 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
 		LEFT JOIN presence p ON i.mmsi = p.mmsi
-		WHERE `+sustainedFilter+`
+		LEFT JOIN operators op ON op.slug = v.operator_slug
+		WHERE `+s.publicFilter()+`
 		  -- Require at least 10 minutes of observed presence: otherwise the
 		  -- ratio is meaningless (boats seen only during one infraction
 		  -- always score 100%).
 		  AND p.time_in_zone_seconds >= 600
-		GROUP BY i.mmsi, v.name, p.time_in_zone_seconds
+		GROUP BY i.mmsi, v.mmsi, op.name, p.time_in_zone_seconds
 		ORDER BY excess_ratio DESC, total_excess_seconds DESC
 		LIMIT $1
 	`, limit)
@@ -221,7 +311,7 @@ func (s *Store) TopOffenders(ctx context.Context, limit int) ([]Offender, error)
 	var offenders []Offender
 	for rows.Next() {
 		var o Offender
-		if err := rows.Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
+		if err := rows.Scan(&o.MMSI, &o.VesselName, &o.PhotoThumbURL, &o.Category, &o.OperatorSlug, &o.OperatorName, &o.InfractionCount,
 			&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
 			&o.AvgInfractionDurationSecs, &o.TotalExcessSeconds, &o.ExcessTimeRatio); err != nil {
 			return nil, err
@@ -244,6 +334,16 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		)
 		SELECT i.mmsi,
 		       COALESCE(NULLIF(v.name, ''), MAX(i.vessel_name), '') as vessel_name,
+		       COALESCE(v.photo_thumb_url, '') as photo_thumb_url,
+		       COALESCE(v.photo_url, '') as photo_url,
+		       COALESCE(v.flag, '') as flag,
+		       COALESCE(v.type_text, '') as type_text,
+		       COALESCE(v.length_m, 0) as length_m,
+		       COALESCE(v.beam_m, 0) as beam_m,
+		       COALESCE(v.eni, 0) as eni,
+		       `+categorySQL+` as category,
+		       COALESCE(v.operator_slug, '') as operator_slug,
+		       COALESCE(op.name, '') as operator_name,
 		       COUNT(*) as infraction_count,
 		       MAX(i.max_speed_knots) as max_speed, AVG(i.avg_speed_knots) as avg_speed,
 		       MAX(i.ended_at) as last_infraction,
@@ -258,9 +358,10 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		       END as excess_ratio
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
-		WHERE i.mmsi = $1 AND `+sustainedFilter+`
-		GROUP BY i.mmsi, v.name
-	`, mmsi).Scan(&o.MMSI, &o.VesselName, &o.InfractionCount,
+		LEFT JOIN operators op ON op.slug = v.operator_slug
+		WHERE i.mmsi = $1 AND `+s.publicFilter()+`
+		GROUP BY i.mmsi, v.mmsi, op.name
+	`, mmsi).Scan(&o.MMSI, &o.VesselName, &o.PhotoThumbURL, &o.PhotoURL, &o.Flag, &o.TypeText, &o.LengthM, &o.BeamM, &o.ENI, &o.Category, &o.OperatorSlug, &o.OperatorName, &o.InfractionCount,
 		&o.MaxSpeedKnots, &o.AvgSpeedKnots, &o.LastInfractionAt, &o.CumulativeExcess,
 		&o.AvgInfractionDurationSecs, &o.TotalExcessSeconds, &o.ExcessTimeRatio)
 	if err == sql.ErrNoRows {
@@ -277,7 +378,7 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 		       i.start_lat, i.start_lon, i.end_lat, i.end_lon, i.started_at, i.ended_at, i.ping_count
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
-		WHERE i.mmsi = $1 AND `+sustainedFilter+`
+		WHERE i.mmsi = $1 AND `+s.publicFilter()+`
 		ORDER BY i.ended_at DESC
 		LIMIT 100
 	`, mmsi)
@@ -299,9 +400,7 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 	return o, infractions, rows.Err()
 }
 
-// GetInfraction returns a single infraction by id (no sustained-duration
-// filter — callers may want to display any record, e.g. a leaderboard link).
-// Returns nil on no match.
+// GetInfraction returns a public infraction by id, or nil on no match.
 func (s *Store) GetInfraction(ctx context.Context, id int64) (*Infraction, error) {
 	inf := &Infraction{}
 	err := s.db.QueryRowContext(ctx, `
@@ -311,7 +410,7 @@ func (s *Store) GetInfraction(ctx context.Context, id int64) (*Infraction, error
 		       i.start_lat, i.start_lon, i.end_lat, i.end_lon, i.started_at, i.ended_at, i.ping_count
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
-		WHERE i.id = $1
+		WHERE i.id = $1 AND `+s.publicFilter()+`
 	`, id).Scan(&inf.ID, &inf.MMSI, &inf.VesselName, &inf.MaxSpeedKnots,
 		&inf.AvgSpeedKnots, &inf.SpeedLimitKnots, &inf.StartLat, &inf.StartLon,
 		&inf.EndLat, &inf.EndLon, &inf.StartedAt, &inf.EndedAt, &inf.PingCount)
@@ -336,7 +435,7 @@ func (s *Store) RecentInfractions(ctx context.Context, limit, sinceHours int) ([
 		       i.start_lat, i.start_lon, i.end_lat, i.end_lon, i.started_at, i.ended_at, i.ping_count
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
-		WHERE `+sustainedFilter+since+`
+		WHERE `+s.publicFilter()+since+`
 		ORDER BY i.ended_at DESC
 		LIMIT $1
 	`, limit)
@@ -371,18 +470,19 @@ func (s *Store) GetStats(ctx context.Context) (*Stats, error) {
 		return nil, err
 	}
 
-	err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM infractions i WHERE `+sustainedFilter).Scan(&st.TotalInfractions)
+	const fromIV = ` FROM infractions i LEFT JOIN vessels v ON v.mmsi = i.mmsi WHERE `
+	err = s.db.QueryRowContext(ctx, `SELECT COUNT(*)`+fromIV+s.publicFilter()).Scan(&st.TotalInfractions)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT i.mmsi) FROM infractions i WHERE `+sustainedFilter).Scan(&st.UniqueOffenders)
+	err = s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT i.mmsi)`+fromIV+s.publicFilter()).Scan(&st.UniqueOffenders)
 	if err != nil {
 		return nil, err
 	}
 
 	var avgSpeed, maxSpeed sql.NullFloat64
-	err = s.db.QueryRowContext(ctx, `SELECT AVG(i.max_speed_knots), MAX(i.max_speed_knots) FROM infractions i WHERE `+sustainedFilter).Scan(&avgSpeed, &maxSpeed)
+	err = s.db.QueryRowContext(ctx, `SELECT AVG(i.max_speed_knots), MAX(i.max_speed_knots)`+fromIV+s.publicFilter()).Scan(&avgSpeed, &maxSpeed)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +493,7 @@ func (s *Store) GetStats(ctx context.Context) (*Stats, error) {
 	// sustained infraction. Floored at 1 day to avoid division blow-ups on
 	// fresh installs.
 	var firstAt sql.NullTime
-	err = s.db.QueryRowContext(ctx, `SELECT MIN(i.started_at) FROM infractions i WHERE `+sustainedFilter).Scan(&firstAt)
+	err = s.db.QueryRowContext(ctx, `SELECT MIN(i.started_at)`+fromIV+s.publicFilter()).Scan(&firstAt)
 	if err != nil {
 		return nil, err
 	}
@@ -415,12 +515,14 @@ func (s *Store) FastestVessels(ctx context.Context, limit int) ([]VesselSpeedRow
 		SELECT DISTINCT ON (i.mmsi)
 		       i.id, i.mmsi,
 		       COALESCE(NULLIF(v.name, ''), i.vessel_name, '') as vessel_name,
+		       COALESCE(v.photo_thumb_url, '') as photo_thumb_url,
+		       `+categorySQL+` as category,
 		       i.max_speed_knots, i.avg_speed_knots, i.speed_limit_knots,
 		       i.started_at, i.ended_at,
 		       EXTRACT(EPOCH FROM (i.ended_at - i.started_at))::int as duration_seconds
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
-		WHERE `+sustainedFilter+`
+		WHERE `+s.publicFilter()+`
 		ORDER BY i.mmsi, i.max_speed_knots DESC
 	`)
 	if err != nil {
@@ -431,7 +533,7 @@ func (s *Store) FastestVessels(ctx context.Context, limit int) ([]VesselSpeedRow
 	var out []VesselSpeedRow
 	for rows.Next() {
 		var r VesselSpeedRow
-		if err := rows.Scan(&r.InfractionID, &r.MMSI, &r.VesselName, &r.MaxSpeedKnots, &r.AvgSpeedKnots,
+		if err := rows.Scan(&r.InfractionID, &r.MMSI, &r.VesselName, &r.PhotoThumbURL, &r.Category, &r.MaxSpeedKnots, &r.AvgSpeedKnots,
 			&r.SpeedLimitKnots, &r.StartedAt, &r.EndedAt, &r.DurationSeconds); err != nil {
 			return nil, err
 		}
@@ -458,6 +560,7 @@ func (s *Store) LivePositions(ctx context.Context, sinceMinutes int) ([]LivePosi
 		SELECT DISTINCT ON (p.mmsi)
 		       p.mmsi,
 		       COALESCE(NULLIF(v.name, ''), '') as vessel_name,
+		       COALESCE(v.photo_thumb_url, '') as photo_thumb_url,
 		       p.latitude, p.longitude, p.speed_knots, p.course, p.received_at
 		FROM positions p
 		LEFT JOIN vessels v ON p.mmsi = v.mmsi
@@ -472,7 +575,7 @@ func (s *Store) LivePositions(ctx context.Context, sinceMinutes int) ([]LivePosi
 	var out []LivePosition
 	for rows.Next() {
 		var p LivePosition
-		if err := rows.Scan(&p.MMSI, &p.VesselName, &p.Latitude, &p.Longitude,
+		if err := rows.Scan(&p.MMSI, &p.VesselName, &p.PhotoThumbURL, &p.Latitude, &p.Longitude,
 			&p.SpeedKnots, &p.Course, &p.ReceivedAt); err != nil {
 			return nil, err
 		}
@@ -503,6 +606,55 @@ func (s *Store) UnnamedVessels(ctx context.Context, limit int) ([]int, error) {
 		mmsis = append(mmsis, mmsi)
 	}
 	return mmsis, rows.Err()
+}
+
+// VesselsNeedingEnrichment returns MMSIs of vessels never enriched (photo,
+// dimensions, ENI, etc.), most-recently-seen first, limited to n. enriched_at
+// is set on every attempt, so a vessel with no public record is tried once and
+// then left alone.
+func (s *Store) VesselsNeedingEnrichment(ctx context.Context, limit int) ([]int, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT mmsi FROM vessels
+		WHERE enriched_at IS NULL
+		ORDER BY last_seen DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var mmsis []int
+	for rows.Next() {
+		var mmsi int
+		if err := rows.Scan(&mmsi); err != nil {
+			return nil, err
+		}
+		mmsis = append(mmsis, mmsi)
+	}
+	return mmsis, rows.Err()
+}
+
+// UpdateVesselEnrichment writes externally-fetched metadata onto a vessel row
+// and stamps enriched_at. Empty/zero fields in e leave the existing column
+// untouched, so a partial lookup never overwrites good data; the name is only
+// filled when currently blank (AIS-reported names take precedence).
+func (s *Store) UpdateVesselEnrichment(ctx context.Context, mmsi int, e Enrichment) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE vessels SET
+			name            = CASE WHEN (name = '' OR name IS NULL) AND $2 <> '' THEN $2 ELSE name END,
+			call_sign       = CASE WHEN (call_sign = '' OR call_sign IS NULL) AND $3 <> '' THEN $3 ELSE call_sign END,
+			photo_url       = CASE WHEN $4 <> '' THEN $4 ELSE photo_url END,
+			photo_thumb_url = CASE WHEN $5 <> '' THEN $5 ELSE photo_thumb_url END,
+			eni             = CASE WHEN $6 <> 0 THEN $6 ELSE eni END,
+			flag            = CASE WHEN $7 <> '' THEN $7 ELSE flag END,
+			type_text       = CASE WHEN $8 <> '' THEN $8 ELSE type_text END,
+			length_m        = CASE WHEN $9 <> 0 THEN $9 ELSE length_m END,
+			beam_m          = CASE WHEN $10 <> 0 THEN $10 ELSE beam_m END,
+			enriched_at     = NOW()
+		WHERE mmsi = $1
+	`, mmsi, e.Name, e.CallSign, e.PhotoURL, e.PhotoThumbURL, e.ENI, e.Flag, e.TypeText, e.LengthM, e.BeamM)
+	return err
 }
 
 // BackfillInfractionNames updates infraction records that have no vessel name.

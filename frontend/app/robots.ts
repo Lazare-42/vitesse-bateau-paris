@@ -10,7 +10,12 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/api/"],
       },
     ],
-    sitemap: `${SITE.url}/sitemap.xml`,
+    // generateSitemaps() emits sub-sitemaps but no parent index, so list each
+    // one (robots.txt supports multiple Sitemap: lines).
+    sitemap: [
+      `${SITE.url}/sitemap/core.xml`,
+      `${SITE.url}/sitemap/bateaux.xml`,
+    ],
     host: SITE.url,
   };
 }

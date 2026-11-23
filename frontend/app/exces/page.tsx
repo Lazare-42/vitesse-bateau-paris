@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { InfractionsBrowser } from "@/components/infractions-browser";
 import { MethodologyNote } from "@/components/methodology-note";
+import { JsonLd } from "@/components/json-ld";
+import type { Offender } from "@/lib/api";
 import { SITE } from "@/site.config";
 
 export const dynamic = "force-dynamic";
@@ -50,8 +52,21 @@ export default async function InfractionsPage() {
     getOffenders(),
   ]);
 
+  const itemList = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: `Bateaux en excès de vitesse sur la ${SITE.river} à ${SITE.city}`,
+    itemListElement: (offenders as Offender[]).slice(0, 25).map((o, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: o.vessel_name || `MMSI ${o.mmsi}`,
+      url: `${SITE.url}/bateau/${o.mmsi}`,
+    })),
+  };
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      {itemList.itemListElement.length > 0 && <JsonLd data={itemList} />}
       <h1 className="mb-4 text-2xl font-bold tracking-tight">
         Tous les excès de vitesse sur la {SITE.river}
       </h1>

@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Suspense, useCallback } from "react";
-import { OffendersTable } from "./offenders-table";
+import { OffendersByCategory, FastestByCategory } from "./category-filter";
 import { ViolationsTable } from "./violations-table";
-import { FastestTable, type FastestEver } from "./fastest-table";
+import { type FastestEver } from "./fastest-table";
 import { SITE } from "@/site.config";
 
 type TabId = "records" | "rois" | "recents";
@@ -27,6 +27,7 @@ interface Offender {
   avg_infraction_duration_seconds: number;
   total_excess_seconds: number;
   excess_time_ratio: number;
+  category?: "passagers" | "petits" | "fret" | "autres";
 }
 
 interface Infraction {
@@ -119,7 +120,7 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
               Voir le classement complet &rarr;
             </Link>
           </div>
-          <FastestTable data={fastest} />
+          <FastestByCategory data={fastest} />
         </section>
       )}
 
@@ -137,7 +138,7 @@ function HomeTabsInner({ fastest, offenders, infractions }: HomeTabsProps) {
             autres colonnes (durée moyenne par excès, total cumulé, nombre
             d&apos;excès, vitesse max, etc.) restent triables.
           </p>
-          <OffendersTable data={offenders} />
+          <OffendersByCategory data={offenders} />
         </section>
       )}
 

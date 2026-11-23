@@ -1,9 +1,9 @@
 "use client";
 
+import { BaseTiles } from "./base-tiles";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   MapContainer,
-  TileLayer,
   Polyline,
   CircleMarker,
   Rectangle,
@@ -389,9 +389,9 @@ export function InfractionsMap({
           center={SITE.mapCenter}
           zoom={SITE.mapZoom}
           className="h-[50vh] sm:h-[70vh] w-full"
-          attributionControl={false}
+          attributionControl={true}
         >
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+          <BaseTiles />
           <ClearZoneOnClick onClear={() => handleSelectZone(null)} />
           <FlyToInfraction infraction={focusedInfraction} />
 

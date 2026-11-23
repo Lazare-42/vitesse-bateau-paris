@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
-import { Sofia_Sans } from "next/font/google";
+import localFont from "next/font/local";
+import Link from "next/link";
+import { JsonLd } from "@/components/json-ld";
 import { Nav } from "@/components/nav";
+import { PageTracker } from "@/components/page-tracker";
 import { SITE, SPEED_LIMIT_KNOTS } from "@/site.config";
 import "./globals.css";
 
-const sofiaSans = Sofia_Sans({
-  subsets: ["latin"],
+// Sofia Sans, bundled locally (OFL, from google/fonts) instead of
+// next/font/google — so the build is hermetic (no Google fetch at build time,
+// required for the Nix sandbox). Same family/appearance, same --font-sofia var.
+const sofiaSans = localFont({
+  src: "./fonts/SofiaSans.ttf",
   display: "swap",
-  weight: ["400", "500", "600", "700"],
+  weight: "400 700",
   variable: "--font-sofia",
 });
 
@@ -82,6 +88,26 @@ export default function RootLayout({
       email: "lazare.bot@gmail.com",
       sameAs: ["https://github.com/Lazare-42/vitesse-bateau-paris"],
     },
+    {
+      "@context": "https://schema.org",
+      "@type": "Dataset",
+      name: `Excès de vitesse des bateaux sur la ${SITE.river} à ${SITE.city}`,
+      description,
+      url: SITE.url,
+      inLanguage: "fr-FR",
+      isAccessibleForFree: true,
+      creator: { "@type": "Person", name: "Lazare Rossillon" },
+      keywords: [
+        "AIS",
+        "vitesse bateau",
+        SITE.river,
+        SITE.city,
+        "navigation fluviale",
+        "excès de vitesse",
+      ],
+      measurementTechnique: "AIS (Automatic Identification System)",
+      variableMeasured: "Vitesse des bateaux (SOG, nœuds / km/h)",
+    },
   ];
 
   return (
@@ -89,16 +115,20 @@ export default function RootLayout({
       <body
         className={`${sofiaSans.variable} font-sans flex min-h-screen flex-col antialiased`}
       >
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        <JsonLd data={jsonLd} />
         <Nav />
+        <PageTracker />
 
         <div className="flex-1">{children}</div>
 
         <footer className="border-t border-input mt-12">
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+            <p className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <Link href="/bilan" className="hover:text-foreground">Bilans mensuels</Link>
+              <Link href="/baignade" className="hover:text-foreground">Baignade</Link>
+              <Link href="/a-propos#donnees" className="hover:text-foreground">Données ouvertes</Link>
+              <Link href="/a-propos#droit-de-reponse" className="hover:text-foreground">Droit de réponse</Link>
+            </p>
             <p className="text-xs text-muted-foreground">
               Créé par Lazare Rossillon, contact à{" "}
               <a

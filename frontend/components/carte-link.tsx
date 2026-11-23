@@ -1,6 +1,9 @@
+import Link from "next/link";
+
 export function CarteLink({ href }: { href: string }) {
   return (
-    <a
+    <Link
+      prefetch={false}
       href={href}
       className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
     >
@@ -23,6 +26,6 @@ export function CarteLink({ href }: { href: string }) {
         />
       </svg>
       Carte
-    </a>
+    </Link>
   );
 }

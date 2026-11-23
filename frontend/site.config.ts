@@ -64,6 +64,12 @@ export const SITE = {
   // zone). Chaque déploiement fournit les siennes via NEXT_PUBLIC_MAP_ZONES
   // (JSON sérialisé) dans son .env.local.
   zones: parseZones(process.env.NEXT_PUBLIC_MAP_ZONES, []),
+
+  // Date de mise en ligne publique du site (YYYY-MM-DD). Affichée comme
+  // repère sur les graphiques d'évolution. Vide = pas de repère.
+  launchDate: /^\d{4}-\d{2}-\d{2}$/.test(process.env.NEXT_PUBLIC_LAUNCH_DATE || "")
+    ? (process.env.NEXT_PUBLIC_LAUNCH_DATE as string)
+    : "",
 } as const;
 
 export const SPEED_LIMIT_KNOTS = SITE.speedLimitKmh / 1.852;

@@ -1,8 +1,10 @@
 import { SPEED_LIMIT_KNOTS } from "@/site.config";
+import { BoatThumb } from "./boat-thumb";
 
 export interface LivePosition {
   mmsi: number;
   vessel_name: string;
+  photo_thumb_url?: string;
   latitude: number;
   longitude: number;
   speed_knots: number;
@@ -84,6 +86,11 @@ export function CruisingList({
                       km/h
                     </span>
                   </div>
+                  <BoatThumb
+                    src={p.photo_thumb_url}
+                    alt={p.vessel_name || `MMSI ${p.mmsi}`}
+                    size={32}
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">
                       {p.vessel_name || "Inconnu"}

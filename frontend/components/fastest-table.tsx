@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { CarteLink } from "./carte-link";
+import { BoatThumb } from "./boat-thumb";
 
 export interface FastestEver {
   infraction_id: number;
   mmsi: number;
   vessel_name: string;
+  photo_thumb_url?: string;
+  category?: "passagers" | "petits" | "fret" | "autres";
   max_speed_knots: number;
   avg_speed_knots: number;
   speed_limit_knots: number;
@@ -80,15 +83,21 @@ export function FastestTable({ data }: { data: FastestEver[] }) {
                 <td className="py-3 h-10 px-3 text-muted-foreground">{i + 1}</td>
                 <td className="py-3 h-10 px-3">
                   <Link
-                    href={`/exces?bateau=${r.mmsi}`}
-                    className="hover:underline"
+                    href={`/bateau/${r.mmsi}`}
+                    className="flex items-center gap-3 hover:underline"
                   >
-                    <div className="font-medium">
-                      {r.vessel_name || "Inconnu"}
-                    </div>
-                    <div className="text-xs text-muted-foreground font-mono">
-                      MMSI {r.mmsi}
-                    </div>
+                    <BoatThumb
+                      src={r.photo_thumb_url}
+                      alt={r.vessel_name || `MMSI ${r.mmsi}`}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium truncate">
+                        {r.vessel_name || "Inconnu"}
+                      </span>
+                      <span className="block text-xs text-muted-foreground font-mono">
+                        MMSI {r.mmsi}
+                      </span>
+                    </span>
                   </Link>
                 </td>
                 <td className="py-3 h-10 px-3 text-right font-medium text-speed-danger">
@@ -126,16 +135,24 @@ export function FastestTable({ data }: { data: FastestEver[] }) {
             className="rounded-lg border bg-card p-4 text-card-foreground transition-colors"
           >
             <Link
-              href={`/exces?bateau=${r.mmsi}`}
+              href={`/bateau/${r.mmsi}`}
               className="block active:bg-muted/50 -m-4 p-4 rounded-lg"
             >
               <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-xs text-muted-foreground">#{i + 1}</span>
-                  <p className="font-semibold">{r.vessel_name || "Inconnu"}</p>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    MMSI {r.mmsi}
-                  </p>
+                <div className="flex items-start gap-3">
+                  <BoatThumb
+                    src={r.photo_thumb_url}
+                    alt={r.vessel_name || `MMSI ${r.mmsi}`}
+                  />
+                  <div>
+                    <span className="text-xs text-muted-foreground">
+                      #{i + 1}
+                    </span>
+                    <p className="font-semibold">{r.vessel_name || "Inconnu"}</p>
+                    <p className="text-xs text-muted-foreground font-mono">
+                      MMSI {r.mmsi}
+                    </p>
+                  </div>
                 </div>
                 <span className="text-lg font-bold text-speed-danger">
                   {knotsToKmh(r.max_speed_knots)} km/h

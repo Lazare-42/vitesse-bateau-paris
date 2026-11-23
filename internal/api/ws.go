@@ -20,10 +20,10 @@ var upgrader = websocket.Upgrader{
 }
 
 const (
-	wsWriteWait      = 10 * time.Second
-	wsPongWait       = 60 * time.Second
-	wsPingPeriod     = 30 * time.Second
-	wsClientSendBuf  = 64
+	wsWriteWait     = 10 * time.Second
+	wsPongWait      = 60 * time.Second
+	wsPingPeriod    = 30 * time.Second
+	wsClientSendBuf = 64
 )
 
 // handleWSLive upgrades the connection and streams every position broadcast

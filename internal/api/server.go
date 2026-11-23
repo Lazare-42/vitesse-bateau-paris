@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,13 +20,26 @@ type Server struct {
 	logger *slog.Logger
 	hub    *broadcast.Hub
 	srv    *http.Server
+	opts   Options
+	cache  *ttlCache
 }
 
-func NewServer(s *store.Store, hub *broadcast.Hub, logger *slog.Logger) *Server {
+// Options carries optional, deployment-specific features.
+type Options struct {
+	SwimSites   []store.SwimSite
+	SwimRadiusM int
+}
+
+func NewServer(s *store.Store, hub *broadcast.Hub, logger *slog.Logger, opts Options) *Server {
+	if opts.SwimRadiusM <= 0 {
+		opts.SwimRadiusM = 300
+	}
 	srv := &Server{
 		store:  s,
 		hub:    hub,
 		logger: logger,
+		opts:   opts,
+		cache:  newTTLCache(),
 	}
 	srv.setupRouter()
 	return srv
@@ -35,11 +49,12 @@ func (s *Server) setupRouter() {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(corsMiddleware)
 
 	r.Get("/health", s.handleHealth)
+	// Local-only audience summary (see hits.go); not under /api on purpose.
+	r.Get("/admin/traffic", s.handleTraffic)
 
 	// REST endpoints: 30 s request timeout.
 	r.Group(func(r chi.Router) {
@@ -52,6 +67,23 @@ func (s *Server) setupRouter() {
 			r.Get("/infractions/{id}", s.handleInfractionDetail)
 			r.Get("/fastest", s.handleFastest)
 			r.Get("/live", s.handleLive)
+			r.Get("/stats/recent", s.handleRecentStats)
+			r.Get("/trends", s.handleTrends)
+			r.Get("/offenders/{mmsi}/trends", s.handleVesselTrends)
+			r.Get("/operators", s.handleOperators)
+			r.Get("/operators/{slug}/trends", s.handleOperatorTrends)
+			r.Get("/swim-sites", s.handleSwimSites)
+			r.Get("/months/{month}/boats", s.handleMonthBoats)
+			r.Post("/hit", s.handleHit)
+		})
+	})
+
+	// CSV exports can take longer than 30 s to stream on slow clients.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Timeout(5 * time.Minute))
+		r.Route("/api/export", func(r chi.Router) {
+			r.Get("/infractions.csv", s.handleExportInfractions)
+			r.Get("/boat-days.csv", s.handleExportBoatDays)
 		})
 	})
 
@@ -87,8 +119,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		if r.Method == "OPTIONS" {

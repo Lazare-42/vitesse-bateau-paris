@@ -11,6 +11,24 @@ type Config struct {
 	Database DatabaseConfig `toml:"database"`
 	AIS      AISConfig      `toml:"ais"`
 	Server   ServerConfig   `toml:"server"`
+	River    RiverConfig    `toml:"river"`
+}
+
+// RiverConfig holds optional river context. All fields optional: an empty
+// station disables flow fetching; no swim sites disables that endpoint.
+type RiverConfig struct {
+	// Hub'Eau hydrometry station code (e.g. F700000103 = Seine à Paris-Austerlitz).
+	HubeauStation string `toml:"hubeau_station"`
+	// Bathing sites to monitor (name, lat, lon).
+	SwimSites []SwimSite `toml:"swim_sites"`
+	// Radius around each swim site, metres (default 300).
+	SwimRadiusM int `toml:"swim_radius_m"`
+}
+
+type SwimSite struct {
+	Name string  `toml:"name"`
+	Lat  float64 `toml:"lat"`
+	Lon  float64 `toml:"lon"`
 }
 
 type DatabaseConfig struct {
@@ -18,9 +36,12 @@ type DatabaseConfig struct {
 }
 
 type AISConfig struct {
-	APIKey          string    `toml:"api_key"`
-	SpeedLimitKnots float64  `toml:"speed_limit_knots"`
+	APIKey          string     `toml:"api_key"`
+	SpeedLimitKnots float64    `toml:"speed_limit_knots"`
 	BBox            [4]float64 `toml:"bbox"` // sw_lat, sw_lon, ne_lat, ne_lon
+	// LegalBBox, optional: only infractions starting inside this box are
+	// shown publicly (the area where the limit legally applies). Zero = BBox.
+	LegalBBox [4]float64 `toml:"legal_bbox"`
 }
 
 type ServerConfig struct {
@@ -39,6 +60,7 @@ func Load(path string) (*Config, error) {
 			SpeedLimitKnots: 6.5,
 			BBox:            [4]float64{48.815, 2.25, 48.91, 2.42},
 		},
+		River: RiverConfig{SwimRadiusM: 300},
 		Server: ServerConfig{
 			Port: 8080,
 			Bind: "0.0.0.0",

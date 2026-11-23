@@ -44,4 +44,84 @@ CREATE TABLE IF NOT EXISTS infractions (
 CREATE INDEX IF NOT EXISTS idx_infractions_mmsi ON infractions(mmsi);
 CREATE INDEX IF NOT EXISTS idx_infractions_started_at ON infractions(started_at);
 CREATE INDEX IF NOT EXISTS idx_infractions_max_speed ON infractions(max_speed_knots DESC);
+
+-- Enrichment columns, filled by internal/enrich from the VesselFinder click
+-- API (one HTTP call already made for name lookups). photo_* are public
+-- ship-photo URLs; eni is the European inland-vessel registry id (the key for
+-- any future owner/operator lookup); length_m/beam_m come from the same call.
+-- enriched_at is set on every attempt (success or not) so we don't re-hit the
+-- upstream for vessels that simply have no public record.
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS photo_url       TEXT NOT NULL DEFAULT '';
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS photo_thumb_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS eni             BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS flag            TEXT NOT NULL DEFAULT '';
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS type_text       TEXT NOT NULL DEFAULT '';
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS length_m        DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS beam_m          DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS enriched_at     TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_vessels_enriched_at ON vessels(enriched_at);
+
+-- Manual exemption flag (police, fire brigade, VNF service craft...) on top
+-- of the automatic type-based rule in exemptVesselSQL. exempt_reason is shown
+-- on /a-propos-style pages when relevant.
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS exempt        BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS exempt_reason TEXT    NOT NULL DEFAULT '';
+
+-- Operators (companies). Mapping is curated from public sources; see
+-- operatorSeed in operators.go.
+CREATE TABLE IF NOT EXISTS operators (
+    slug  TEXT PRIMARY KEY,
+    name  TEXT NOT NULL,
+    url   TEXT NOT NULL DEFAULT '',
+    note  TEXT NOT NULL DEFAULT ''
+);
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS operator_slug TEXT REFERENCES operators(slug);
+
+-- boat_days: one row per vessel x Paris-local day x direction with the time
+-- (seconds) spent moving (1 < SOG < 30 kn), above the limit, above 15 and
+-- 20 km/h. Each stored ping stands for the interval until the vessel's next
+-- stored ping, capped at 60 s for speeding pings (stored at full AIS rate)
+-- and 330 s for others (throttled to one per 5 min). This time-weighting
+-- avoids over-counting speeding, whose pings are far more numerous.
+-- dir: 'down' = westward course component (Seine flows E->W through Paris),
+-- 'up' otherwise. Refreshed incrementally by RefreshBoatDays.
+-- Pre-release versions of boat_days stored sample counts (column n); the
+-- table is a pure derivative of positions, so drop and rebuild it.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'boat_days' AND column_name = 'n') THEN
+    DROP TABLE boat_days;
+  END IF;
+END $$;
+CREATE TABLE IF NOT EXISTS boat_days (
+    mmsi         INTEGER NOT NULL,
+    day          DATE    NOT NULL,
+    dir          TEXT    NOT NULL,
+    secs         DOUBLE PRECISION NOT NULL,
+    secs_over    DOUBLE PRECISION NOT NULL,
+    secs_over15  DOUBLE PRECISION NOT NULL,
+    secs_over20  DOUBLE PRECISION NOT NULL,
+    kmh_secs     DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (mmsi, day, dir)
+);
+CREATE INDEX IF NOT EXISTS idx_boat_days_day ON boat_days(day);
+
+-- Cookieless audience measurement: daily page-view counts per path,
+-- referring host and device class. No IP, no user agent, no identifier is
+-- stored, so no visitor can be singled out.
+CREATE TABLE IF NOT EXISTS page_views (
+    day      DATE    NOT NULL,
+    path     TEXT    NOT NULL,
+    referrer TEXT    NOT NULL DEFAULT '',
+    device   TEXT    NOT NULL DEFAULT '',
+    views    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, path, referrer, device)
+);
+
+-- Daily mean river flow (m3/s) from Hub'Eau, station configured in
+-- [river] hubeau_station. Used to put downstream speeds in context.
+CREATE TABLE IF NOT EXISTS river_flow (
+    day   DATE PRIMARY KEY,
+    q_m3s DOUBLE PRECISION NOT NULL
+);
 `

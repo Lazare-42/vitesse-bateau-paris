@@ -50,16 +50,16 @@ type Client struct {
 	hub        *broadcast.Hub // nil-safe; broadcasts every validated position
 
 	mu       sync.Mutex
-	lastSave map[int]time.Time           // mmsi -> last non-violation position save
-	sessions map[int]*activeSession       // mmsi -> active speeding session
+	lastSave map[int]time.Time      // mmsi -> last non-violation position save
+	sessions map[int]*activeSession // mmsi -> active speeding session
 }
 
 // AIS protocol types
 
 type subscriptionMessage struct {
-	APIKey             string            `json:"APIKey"`
-	BoundingBoxes      [][][2]float64    `json:"BoundingBoxes"`
-	FilterMessageTypes []string          `json:"FilterMessageTypes,omitempty"`
+	APIKey             string         `json:"APIKey"`
+	BoundingBoxes      [][][2]float64 `json:"BoundingBoxes"`
+	FilterMessageTypes []string       `json:"FilterMessageTypes,omitempty"`
 }
 
 type aisStreamMessage struct {
@@ -73,7 +73,7 @@ type positionReport struct {
 	Sog         float64 `json:"Sog"`    // Speed Over Ground in knots
 	Latitude    float64 `json:"Latitude"`
 	Longitude   float64 `json:"Longitude"`
-	Cog         float64 `json:"Cog"`         // Course Over Ground
+	Cog         float64 `json:"Cog"` // Course Over Ground
 	TrueHeading int     `json:"TrueHeading"`
 }
 

@@ -7,3 +7,4 @@ frontend/.next/
 frontend/tsconfig.tsbuildinfo
 frontend/.env.local
 frontend/.env.*.local
+logs
