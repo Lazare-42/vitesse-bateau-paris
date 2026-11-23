@@ -242,7 +242,8 @@ export default function AProposPage() {
               sépare de la suivante (plafonné à 1 minute pour une position en
               excès, enregistrée à pleine cadence, et à 5 min 30 sinon, car les
               autres positions ne sont conservées qu&apos;une fois toutes les 5
-              minutes). Le temps à quai n&apos;est pas compté. Le nombre
+              minutes). Pour la dernière position, on applique le même plafond au
+              temps écoulé depuis sa réception. Le temps à quai n&apos;est pas compté. Le nombre
               d&apos;excès, lui, dépend surtout du trafic.
             </li>
             <li>

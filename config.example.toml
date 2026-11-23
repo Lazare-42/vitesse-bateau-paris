@@ -10,13 +10,13 @@ speed_limit_knots = 6.5
 # Bounding box for Seine in Paris [sw_lat, sw_lon, ne_lat, ne_lon]
 bbox = [48.815, 2.25, 48.91, 2.42]
 
-[server]
-port = 8080
-bind = "0.0.0.0"
-
 # Optional: only infractions starting inside this box are shown publicly
 # (where the speed limit legally applies). Defaults to bbox.
 # legal_bbox = [48.815, 2.262, 48.91, 2.41]
+
+[server]
+port = 8080
+bind = "0.0.0.0"
 
 [river]
 # Hub'Eau hydrometry station for river-flow context (empty = disabled).

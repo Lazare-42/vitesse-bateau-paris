@@ -38,9 +38,7 @@ const categorySQL = `(CASE
   WHEN COALESCE(v.ship_type, 0) BETWEEN 70 AND 89 OR COALESCE(v.ship_type, 0) IN (31, 32, 33, 52)
        OR COALESCE(v.type_text, '') ~* '^(cargo|tanker|tug|dredging)' THEN 'fret'
   WHEN COALESCE(v.length_m, 0) > 0 AND v.length_m < 20 THEN 'petits'
-  WHEN COALESCE(v.type_text, '') ~* '^(pleasure|yacht|sailing)' OR COALESCE(v.ship_type, 0) IN (36, 37) THEN 'petits'
-  WHEN COALESCE(v.ship_type, 0) BETWEEN 60 AND 69 OR COALESCE(v.type_text, '') ~* '^passenger'
-       OR COALESCE(v.length_m, 0) >= 20 THEN 'passagers'
+  WHEN v.length_m >= 20 AND (v.ship_type BETWEEN 60 AND 69 OR v.type_text ~* '^passenger') THEN 'passagers'
   ELSE 'autres' END)`
 
 // publicFilter is the WHERE fragment for every infraction shown or counted
@@ -402,9 +400,7 @@ func (s *Store) OffenderDetail(ctx context.Context, mmsi int) (*Offender, []Infr
 	return o, infractions, rows.Err()
 }
 
-// GetInfraction returns a single infraction by id (no sustained-duration
-// filter — callers may want to display any record, e.g. a leaderboard link).
-// Returns nil on no match.
+// GetInfraction returns a public infraction by id, or nil on no match.
 func (s *Store) GetInfraction(ctx context.Context, id int64) (*Infraction, error) {
 	inf := &Infraction{}
 	err := s.db.QueryRowContext(ctx, `
@@ -414,7 +410,7 @@ func (s *Store) GetInfraction(ctx context.Context, id int64) (*Infraction, error
 		       i.start_lat, i.start_lon, i.end_lat, i.end_lon, i.started_at, i.ended_at, i.ping_count
 		FROM infractions i
 		LEFT JOIN vessels v ON i.mmsi = v.mmsi
-		WHERE i.id = $1
+		WHERE i.id = $1 AND `+s.publicFilter()+`
 	`, id).Scan(&inf.ID, &inf.MMSI, &inf.VesselName, &inf.MaxSpeedKnots,
 		&inf.AvgSpeedKnots, &inf.SpeedLimitKnots, &inf.StartLat, &inf.StartLon,
 		&inf.EndLat, &inf.EndLon, &inf.StartedAt, &inf.EndedAt, &inf.PingCount)

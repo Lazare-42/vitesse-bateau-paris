@@ -38,7 +38,18 @@ func (c *ttlCache) get(key string, ttl time.Duration, fn func() (any, error)) (a
 		return nil, err
 	}
 	c.mu.Lock()
-	c.m[key] = cacheEntry{v: v, exp: time.Now().Add(ttl)}
+	now := time.Now()
+	const maxEntries = 512
+	if len(c.m) >= maxEntries {
+		for k, entry := range c.m {
+			if !now.Before(entry.exp) {
+				delete(c.m, k)
+			}
+		}
+	}
+	if len(c.m) < maxEntries {
+		c.m[key] = cacheEntry{v: v, exp: now.Add(ttl)}
+	}
 	c.mu.Unlock()
 	return v, nil
 }

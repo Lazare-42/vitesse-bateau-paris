@@ -40,18 +40,18 @@ func (s *Store) RefreshBoatDays(ctx context.Context, from time.Time) error {
 		  SELECT mmsi, speed_knots,
 		         (received_at AT TIME ZONE 'Europe/Paris')::date AS day,
 		         CASE WHEN sin(radians(course)) < 0 THEN 'down' ELSE 'up' END AS dir,
-		         received_at,
 		         LEAST(
-		           EXTRACT(EPOCH FROM LEAD(received_at) OVER (PARTITION BY mmsi ORDER BY received_at) - received_at),
+		           -- The most recent ping cannot represent time in the future.
+		           EXTRACT(EPOCH FROM LEAD(received_at, 1, NOW()) OVER (
+		             PARTITION BY mmsi ORDER BY received_at, id
+		           ) - received_at),
 		           CASE WHEN speed_knots > $2 THEN 60 ELSE 330 END
 		         ) AS w
 		  FROM positions
-		  -- one hour of look-back so the first ping of the window has a successor context
-		  WHERE received_at >= ($1::date)::timestamp AT TIME ZONE 'Europe/Paris' - INTERVAL '1 hour'
+		  WHERE received_at >= ($1::date)::timestamp AT TIME ZONE 'Europe/Paris'
 		) s
-		WHERE w IS NOT NULL AND w > 0
+		WHERE w > 0
 		  AND speed_knots > 1 AND speed_knots < 30
-		  AND received_at >= ($1::date)::timestamp AT TIME ZONE 'Europe/Paris'
 		GROUP BY mmsi, day, dir
 	`, fromDay, s.speedLimitKnots); err != nil {
 		return err
@@ -318,6 +318,7 @@ func (s *Store) Operators(ctx context.Context) ([]Operator, error) {
 	FROM operators o
 	JOIN vessels v ON v.operator_slug = o.slug
 	LEFT JOIN w ON w.mmsi = v.mmsi
+	WHERE NOT `+exemptVesselSQL+`
 	ORDER BY o.name, v.name`)
 	if err != nil {
 		return nil, err
