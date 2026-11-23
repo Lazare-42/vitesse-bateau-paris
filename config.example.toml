@@ -13,3 +13,19 @@ bbox = [48.815, 2.25, 48.91, 2.42]
 [server]
 port = 8080
 bind = "0.0.0.0"
+
+# Optional: only infractions starting inside this box are shown publicly
+# (where the speed limit legally applies). Defaults to bbox.
+# legal_bbox = [48.815, 2.262, 48.91, 2.41]
+
+[river]
+# Hub'Eau hydrometry station for river-flow context (empty = disabled).
+# F700000103 = La Seine à Paris (Austerlitz).
+hubeau_station = "F700000103"
+swim_radius_m = 300
+# Bathing sites monitored in summer (approximate coordinates).
+swim_sites = [
+  { name = "Bras Marie", lat = 48.8526, lon = 2.3570 },
+  { name = "Bercy", lat = 48.8370, lon = 2.3766 },
+  { name = "Grenelle", lat = 48.8508, lon = 2.2826 },
+]

@@ -61,4 +61,46 @@ ALTER TABLE vessels ADD COLUMN IF NOT EXISTS beam_m          DOUBLE PRECISION NO
 ALTER TABLE vessels ADD COLUMN IF NOT EXISTS enriched_at     TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_vessels_enriched_at ON vessels(enriched_at);
+
+-- Manual exemption flag (police, fire brigade, VNF service craft...) on top
+-- of the automatic type-based rule in exemptVesselSQL. exempt_reason is shown
+-- on /a-propos-style pages when relevant.
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS exempt        BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS exempt_reason TEXT    NOT NULL DEFAULT '';
+
+-- Operators (companies). Mapping is curated from public sources; see
+-- operatorSeed in operators.go.
+CREATE TABLE IF NOT EXISTS operators (
+    slug  TEXT PRIMARY KEY,
+    name  TEXT NOT NULL,
+    url   TEXT NOT NULL DEFAULT '',
+    note  TEXT NOT NULL DEFAULT ''
+);
+ALTER TABLE vessels ADD COLUMN IF NOT EXISTS operator_slug TEXT REFERENCES operators(slug);
+
+-- boat_days: one row per vessel x Paris-local day x direction, built from a
+-- de-duplicated sample (first stored ping per vessel per 5-min clock bucket,
+-- moving only: 1 < SOG < 30 kn). Positions are throttled to 1/5 min unless
+-- speeding, so this sample puts speeding and non-speeding time on the same
+-- footing. dir: 'down' = westward course component (Seine flows E->W through
+-- Paris), 'up' otherwise. Refreshed incrementally by RefreshBoatDays.
+CREATE TABLE IF NOT EXISTS boat_days (
+    mmsi      INTEGER NOT NULL,
+    day       DATE    NOT NULL,
+    dir       TEXT    NOT NULL,
+    n         INTEGER NOT NULL,
+    n_over    INTEGER NOT NULL,
+    n_over15  INTEGER NOT NULL,
+    n_over20  INTEGER NOT NULL,
+    sum_kmh   DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (mmsi, day, dir)
+);
+CREATE INDEX IF NOT EXISTS idx_boat_days_day ON boat_days(day);
+
+-- Daily mean river flow (m3/s) from Hub'Eau, station configured in
+-- [river] hubeau_station. Used to put downstream speeds in context.
+CREATE TABLE IF NOT EXISTS river_flow (
+    day   DATE PRIMARY KEY,
+    q_m3s DOUBLE PRECISION NOT NULL
+);
 `

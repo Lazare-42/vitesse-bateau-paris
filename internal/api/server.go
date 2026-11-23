@@ -19,13 +19,26 @@ type Server struct {
 	logger *slog.Logger
 	hub    *broadcast.Hub
 	srv    *http.Server
+	opts   Options
+	cache  *ttlCache
 }
 
-func NewServer(s *store.Store, hub *broadcast.Hub, logger *slog.Logger) *Server {
+// Options carries optional, deployment-specific features.
+type Options struct {
+	SwimSites   []store.SwimSite
+	SwimRadiusM int
+}
+
+func NewServer(s *store.Store, hub *broadcast.Hub, logger *slog.Logger, opts Options) *Server {
+	if opts.SwimRadiusM <= 0 {
+		opts.SwimRadiusM = 300
+	}
 	srv := &Server{
 		store:  s,
 		hub:    hub,
 		logger: logger,
+		opts:   opts,
+		cache:  newTTLCache(),
 	}
 	srv.setupRouter()
 	return srv
@@ -52,6 +65,21 @@ func (s *Server) setupRouter() {
 			r.Get("/infractions/{id}", s.handleInfractionDetail)
 			r.Get("/fastest", s.handleFastest)
 			r.Get("/live", s.handleLive)
+			r.Get("/stats/recent", s.handleRecentStats)
+			r.Get("/trends", s.handleTrends)
+			r.Get("/offenders/{mmsi}/trends", s.handleVesselTrends)
+			r.Get("/operators", s.handleOperators)
+			r.Get("/operators/{slug}/trends", s.handleOperatorTrends)
+			r.Get("/swim-sites", s.handleSwimSites)
+		})
+	})
+
+	// CSV exports can take longer than 30 s to stream on slow clients.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Timeout(5 * time.Minute))
+		r.Route("/api/export", func(r chi.Router) {
+			r.Get("/infractions.csv", s.handleExportInfractions)
+			r.Get("/boat-days.csv", s.handleExportBoatDays)
 		})
 	})
 

@@ -209,19 +209,19 @@ func lookupITU(ctx context.Context, mmsi int) (name, callSign string, err error)
 	breadcrumb := string(matches[1])
 
 	form := url.Values{
-		"Breadcrumb":     {breadcrumb},
-		"ScrollTopValue": {""},
-		"viewCommand":    {"Search"},
-		"onview":         {""},
-		"Search.Name":    {""},
-		"Search.MaritimeMobileServiceIdentity":                              {fmt.Sprintf("%d", mmsi)},
-		"Search.CallSign":                                                    {""},
-		"Search.VesselIdentificationNumber":                                  {""},
+		"Breadcrumb":                           {breadcrumb},
+		"ScrollTopValue":                       {""},
+		"viewCommand":                          {"Search"},
+		"onview":                               {""},
+		"Search.Name":                          {""},
+		"Search.MaritimeMobileServiceIdentity": {fmt.Sprintf("%d", mmsi)},
+		"Search.CallSign":                      {""},
+		"Search.VesselIdentificationNumber":    {""},
 		"Search.EmergencyPositionIndicatingRadioBeaconHexadecimalIdentifier": {""},
-		"Search.SatelliteNumber":                                             {""},
-		"Search.Administration.SelectedId":                                   {""},
-		"Search.GeographicalArea.SelectedId":                                 {""},
-		"Search.GeneralClassification.SelectedId":                            {""},
+		"Search.SatelliteNumber":                  {""},
+		"Search.Administration.SelectedId":        {""},
+		"Search.GeographicalArea.SelectedId":      {""},
+		"Search.GeneralClassification.SelectedId": {""},
 	}
 
 	req, err = http.NewRequestWithContext(ctx, "POST", ituURL, strings.NewReader(form.Encode()))
